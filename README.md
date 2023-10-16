@@ -13,18 +13,18 @@ Gain some experience with advanced timer/counter functionality, pulse width modu
 ### Description
 Operate a cooling fan at different speeds with PWM. Utilize an RPG and a pushbutton (with suitable debounce circuits) as input, and an LCD as output. Use RPG input to modulate duty cycle (DC) of the PWM signal used to control the fan.
 
-Fan off && PBS pressed -> Fan on
-Fan on && PBS pressed -> Fan off
+Fan off && PBS pressed -> Fan on  
+Fan on && PBS pressed -> Fan off  
 (Action occurs immediately on press down)
 
-Fan off && RPG operated -> Do nothing
-Fan on && RPG CW -> Increase duty cycle
-Fan on && RPG CCW -> Decrease duty cycle
+Fan off && RPG operated -> Do nothing  
+Fan on && RPG CW -> Increase duty cycle  
+Fan on && RPG CCW -> Decrease duty cycle  
 
-Use 8-bit Timer/Counter Waveform Generation functionality for generating a PWM signal for the fan on pin OC0B.
-Fixed PWM frequency: 80kHz
-DC adjustable range: 1% <-> 100%
-DC adjustment increments: <= 1%
+Use 8-bit Timer/Counter Waveform Generation functionality for generating a PWM signal for the fan on pin OC0B.  
+Fixed PWM frequency: 80kHz  
+DC adjustable range: 1% <-> 100%  
+DC adjustment increments: <= 1%  
 
 Optional (5% bonus pts): Use tachometer signal to detect when fan is on/off and above/below 2640 rpm (44 Hz).
 
