@@ -10,11 +10,9 @@ Lab4LCDDisplay.asm
 .org 0
 
 ;==================| Configure I/O |=================
-; Output to shiftreg SN74HC595
-sbi DDRB,0					; Board Pin 8 O/P: PB0 -> ShiftReg I/P: SER
-sbi DDRB,1					; Board Pin 9 O/P: PB1 -> ShiftReg I/P: RCLK
-sbi DDRB,2					; Board Pin 10 O/P: PB2 -> ShiftReg I/P: SRCLK
-sbi DDRB,3  				; Board Pin 11 O/P: PB3 -> Status LEDs
+; Output to LCD
+sbi DDRB,3  				; Board Pin 11 O/P: PB3 -> LCD Enable
+sbi DDBR,5					; Board pin 13 O/P: PB5 -> LCD Register Select
 ; Input from pushbuttons
 cbi DDRD,7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
 cbi DDRD,6					; Board Pin 6 RPG A -> Board I/P: PD6
@@ -45,8 +43,29 @@ Init:
 	out TCCR1B, Tmp_Reg
 
 	;init LCD
+	;wait to power up 100ms
+	ldi Tmp_Reg,0x03		;Load hex 3 into register
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	;wait 5ms
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	;wait 200us
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	;wait 200us
+	ldi Tmp_Reg,0x02		;Enable 4-bit mode
+	out PORTC,Tmp_Reg
 
-
+	ldi Tmp_Reg,0x02		;load upper nibble of 0x28
+	out PORTC,Tmp_Reg		;send it
+	ldi Tmp_Reg,0x04		;load lower nibble of 0x28
+	out PORTC,Tmp_Reg	
+	ldi Tmp_Reg,0x08		;hide cursor dont shift display
+	out PORTC,Tmp_Reg
+	ldi Tmp_Reg,0x01		;Clear and home display
+	out PORTC,Tmp_Reg
+	ldi Tmp_Reg,0x06		;move cursor right
+	out PORTC,Tmp_Reg
+	ldi Tmp_Reg,0x0C		;turn on display
+	out PORTC,Tmp_Reg
 Main:
 
 	; loop Main
