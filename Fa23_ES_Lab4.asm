@@ -36,9 +36,16 @@ Ptrns:
 
 ;===================| Main Loop |====================
 Init:
-	; init timer0
+	; init timer0 for PWM
 	ldi Tmp_Reg, 0x05		; configure prescaler to 1024
 	out TCCR0B, Tmp_Reg		; output configuration to TCCR0B
+	
+	;init timer 1 for Genereral use
+	ldi Tmp_Reg, 0x05
+	out TCCR1B, Tmp_Reg
+
+	;init LCD
+
 
 Main:
 
