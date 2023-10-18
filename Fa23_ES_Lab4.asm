@@ -16,9 +16,9 @@ sbi DDRB,5					; Board pin 13 O/P: PB5 -> LCD Register Select
 ; Input from pushbuttons
 cbi DDRD,7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
 cbi DDRD,6					; Board Pin 6 RPG A -> Board I/P: PD6
-cbi DDRD,4  				; Board Pin 4 RPG B -> Board I/P: PD4
+cbi DDRD,5  				; Board Pin 5 RPG B -> Board I/P: PD5
 
-sbi DDRD,5  				; Board Pin 5 OC0B -> Board O/P: PD5
+sbi DDRD,3  				; Board Pin 3 OC0B -> Board O/P: PD3
 
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
@@ -63,29 +63,31 @@ Init_LCD:
 	ret
 
 Init_Timer0:
-	ldi Tmp_Reg, 0x03		; configure timer0 to Fast PWM (mode 7)
-	out TCCR0A, Tmp_Reg
-	ldi Tmp_Reg, 0x08
-	out TCCR0B, Tmp_Reg
-	ldi Tmp_Reg, 200		; set timer0 TOP val to 200
-	out OCR0A, Tmp_Reg
-	ldi Tmp_Reg, 200			; set timer0 duty cycle to 0 (OCR0B = 200 * DC)
-	out OCR0B, Tmp_Reg
+	ldi Tmp_Reg, 0x05
+	sts TCCR0B, Tmp_Reg
 	ret
 
 Init_Timer2:
-	ldi Tmp_Reg, 0x05
+	ldi Tmp_Reg, 0
+	sts TCNT2, Tmp_Reg		; clear timer0
+	ldi Tmp_Reg, 200		; set timer0 TOP val to 200
+	sts OCR2A, Tmp_Reg
+	ldi Tmp_Reg, 0x23		; configure timer0 to Fast PWM (mode 7)
+	sts TCCR2A, Tmp_Reg
+	ldi Tmp_Reg, 0x09
 	sts TCCR2B, Tmp_Reg
+	ldi Tmp_Reg, 0			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
+	sts OCR2B, Tmp_Reg
 	ret
 
 ;delay_112us
 delay_112us:
 	ldi Tmr_Cnt,7			;init timer config
 	ldi Tmp_Reg, 0x01
-	sts TCCR2B, Tmp_Reg
+	sts TCCR0B, Tmp_Reg
 
 	loop_100u:
-	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
+	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
 	rjmp loop_100u
 
@@ -98,10 +100,10 @@ delay_112us:
 delay_208us:
 	ldi Tmr_Cnt,13			;init timer config
 	ldi Tmp_Reg, 0x01
-	sts TCCR2B, Tmp_Reg
+	sts TCCR0B, Tmp_Reg
 
 	loop_200u:
-	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
+	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
 	rjmp loop_200u
 
@@ -114,10 +116,10 @@ delay_208us:
 delay_5ms:
 	ldi Tmr_Cnt,40			;init timer config
 	ldi Tmp_Reg, 0x02
-	sts TCCR2B, Tmp_Reg
+	sts TCCR0B, Tmp_Reg
 
 	loop_5m:
-	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
+	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
 	rjmp loop_5m
 
@@ -130,10 +132,10 @@ delay_5ms:
 delay_100ms:
 	ldi Tmr_Cnt,98			;init timer config
 	ldi Tmp_Reg, 0x03
-	sts TCCR2B, Tmp_Reg
+	sts TCCR0B, Tmp_Reg
 
 	loop_100m:
-	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
+	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
 	rjmp loop_100m
 
