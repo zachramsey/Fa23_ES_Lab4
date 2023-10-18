@@ -16,7 +16,9 @@ sbi DDRB,5					; Board pin 13 O/P: PB5 -> LCD Register Select
 ; Input from pushbuttons
 cbi DDRD,7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
 cbi DDRD,6					; Board Pin 6 RPG A -> Board I/P: PD6
-cbi DDRD,5  				; Board Pin 5 RPG B -> Board I/P: PD5
+cbi DDRD,4  				; Board Pin 4 RPG B -> Board I/P: PD4
+
+sbi DDRD,5  				; Board Pin 5 OC0B -> Board O/P: PD5
 
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
@@ -67,20 +69,20 @@ Init_Timer0:
 	out TCCR0B, Tmp_Reg
 	ldi Tmp_Reg, 200		; set timer0 TOP val to 200
 	out OCR0A, Tmp_Reg
-	ldi Tmp_Reg, 0			; set timer0 duty cycle to 0 (OCR0B = 200 * DC)
+	ldi Tmp_Reg, 200			; set timer0 duty cycle to 0 (OCR0B = 200 * DC)
 	out OCR0B, Tmp_Reg
 	ret
 
 Init_Timer2:
 	ldi Tmp_Reg, 0x05
-	out TCCR2B, Tmp_Reg
+	sts TCCR2B, Tmp_Reg
 	ret
 
 ;delay_112us
 delay_112us:
 	ldi Tmr_Cnt,7			;init timer config
 	ldi Tmp_Reg, 0x01
-	out TCCR2B, Tmp_Reg
+	sts TCCR2B, Tmp_Reg
 
 	loop_100u:
 	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
@@ -96,7 +98,7 @@ delay_112us:
 delay_208us:
 	ldi Tmr_Cnt,13			;init timer config
 	ldi Tmp_Reg, 0x01
-	out TCCR2B, Tmp_Reg
+	sts TCCR2B, Tmp_Reg
 
 	loop_200u:
 	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
@@ -112,7 +114,7 @@ delay_208us:
 delay_5ms:
 	ldi Tmr_Cnt,40			;init timer config
 	ldi Tmp_Reg, 0x02
-	out TCCR2B, Tmp_Reg
+	sts TCCR2B, Tmp_Reg
 
 	loop_5m:
 	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
@@ -128,7 +130,7 @@ delay_5ms:
 delay_100ms:
 	ldi Tmr_Cnt,98			;init timer config
 	ldi Tmp_Reg, 0x03
-	out TCCR2B, Tmp_Reg
+	sts TCCR2B, Tmp_Reg
 
 	loop_100m:
 	in Tmp_Reg, TIFR2		; input timer2 interrupt flag register
