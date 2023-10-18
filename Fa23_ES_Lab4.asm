@@ -20,6 +20,11 @@ cbi DDRD,5  				; Board Pin 5 RPG B -> Board I/P: PD5
 
 sbi DDRD,3  				; Board Pin 3 OC0B -> Board O/P: PD3
 
+sbi DDRC, 0
+sbi DDRC, 1
+sbi DDRC, 2
+sbi DDRC, 3
+
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
 .def Tmr_Cnt = R17			; Timer counter
@@ -76,7 +81,7 @@ Init_Timer2:
 	sts TCCR2A, Tmp_Reg
 	ldi Tmp_Reg, 0x09
 	sts TCCR2B, Tmp_Reg
-	ldi Tmp_Reg, 0			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
+	ldi Tmp_Reg, 80			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
 	sts OCR2B, Tmp_Reg
 	ret
 
@@ -89,6 +94,8 @@ delay_112us:
 	loop_100u:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
+	ldi Tmp_Reg, 0x01
+	out TIFR0, Tmp_Reg
 	rjmp loop_100u
 
 	dec Tmr_Cnt				; Decrement Timer counter
