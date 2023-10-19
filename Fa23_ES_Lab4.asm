@@ -48,18 +48,17 @@ msg:
 
 
 Main:
-	sbi PORTB,5				; put LCD in command mode
+	cbi PORTB,5				; put LCD in input mode
 	;rcall dispString
-	ldi r25, 0x45
-	swap r25
+	;ldi r25, 0xAC
+	;swap r25
 	out PORTC,r25
-	rcall LCD_Strobe
+	;rcall LCD_Strobe
 	rcall delay_112us
-	swap r25
-	out PORTC,r25
+	;swap r25
+	;out PORTC,r25
 	rcall LCD_Strobe
 	rcall delay_100ms
-
 	
 	rjmp Main				; loop Main
 
@@ -208,6 +207,8 @@ delay_112us:
 	dec Tmr_Cnt				; Decrement Timer counter
 	tst Tmr_Cnt				; Is Timer counter zero?
 	brne loop_100u			; No, jump to L1, Yes return
+	;ldi Tmp_Reg, 0x00		;Load config zero into timer before exiting to stop it
+	;out TCCR0B, Tmp_Reg
 	ret
 
 ;delay_208us
@@ -226,6 +227,8 @@ delay_208us:
 	dec Tmr_Cnt				; Decrement Timer counter
 	tst Tmr_Cnt				; Is Timer counter zero?
 	brne loop_200u			; No, jump to L1B, Yes return
+	;ldi Tmp_Reg, 0x00		;Load config zero into timer before exiting to stop it
+	;out TCCR0B, Tmp_Reg
 	ret
 
 ;delay_5.12ms
