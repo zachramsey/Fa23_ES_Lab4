@@ -11,14 +11,12 @@
 
 ;==================| Configure I/O |=================
 ; Output to LCD
-sbi DDRB,4  				; Board Pin 12 O/P: PB4 -> LCD Enable
-sbi DDRB,5					; Board pin 13 O/P: PB5 -> LCD Register Select
-;LCD outputs
-sbi DDRC,0					
-sbi DDRC,1
-sbi DDRC,2
-sbi DDRC,3
-
+sbi DDRB,3  				; O/P: PB3 -> LCD Enable
+sbi DDRB,5					; O/P: PB5 -> LCD Register Select
+sbi DDRC, 0					; O/P: PC0 -> LCD Data Bit 4
+sbi DDRC, 1					; O/P: PC1 -> LCD Data Bit 5
+sbi DDRC, 2					; O/P: PC2 -> LCD Data Bit 6
+sbi DDRC, 3					; O/P: PC3 -> LCD Data Bit 7
 ; Input from pushbuttons
 cbi DDRD,7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
 cbi DDRD,6					; Board Pin 6 RPG A -> Board I/P: PD6
@@ -26,169 +24,115 @@ cbi DDRD,5  				; Board Pin 5 RPG B -> Board I/P: PD5
 
 sbi DDRD,3  				; Board Pin 3 OC0B -> Board O/P: PD3
 
-
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
 .def Tmr_Cnt = R17			; Timer counter
-.def RPG_Curr = R18			; Current RPG input state
-.def RPG_Prev = R19			; previous RPG input state
+.def Tmp_Nbl = R18			; Lower nibble of byte
+.def RPG_Curr = R19			; Current RPG input state
+.def RPG_Prev = R20			; previous RPG input state
 
-;===================| Main Loop |====================
-Init:
-	rcall Init_Timer0		; init timer0 for PWM
-	rcall Init_Timer2		; init timer 2 for General use
-	rcall Init_LCD			; initialize LCD
-	
-	rjmp Main				;Dont execute prog mem
 ; Create a static string in program memory.
+rjmp Init					;Dont execute prog mem
 msg: 
 .DB "Hello "
 .DB "A.J."
 .DW 0
 
+;===================| Main Loop |====================
+Init:
+	rcall Init_LCD			; initialize LCD
+	rcall Init_Timer2		; init timer2 for PWM
+	rcall display_string	; display string
 
 Main:
-	cbi PORTB,5				; put LCD in input mode
-	rcall dispString
-	ldi r25, 0xAC
-	swap r25
-	out PORTC,r25
-	rcall LCD_Strobe
-	rcall delay_100u
-	swap r25
-	out PORTC,r25
-	rcall LCD_Strobe
-	rcall delay_100m
-	
 	rjmp Main				; loop Main
-
-Init_LCD:
-	cbi PORTB,5				; put LCD in command mode
-	cbi PORTB,4				;ensure enable line is low
-
-	rcall delay_100m		;wait 100ms
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	sbi PORTB,3				;pulse enable
-	cbi PORTB,3				
-	rcall delay_5m			;wait 5ms
-	ldi Tmp_Reg,0x03	 	;Load hex 3 into register
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	rcall LCD_Strobe			
-	rcall delay_5m			;wait 5ms
-
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	sbi PORTB,3				;pulse enable
-	cbi PORTB,3				
-	rcall delay_5m			;wait 5ms
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	rcall LCD_Strobe
-	rcall delay_200u
-
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	sbi PORTB,3				;pulse enable
-	cbi PORTB,3				
-	rcall delay_5m			;wait 5ms
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	rcall LCD_Strobe
-	rcall delay_200u
-
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	sbi PORTB,3				;pulse enable
-	cbi PORTB,3				
-	rcall delay_5m			;wait 5ms
-	ldi Tmp_Reg,0x02		;Enable 4-bit mode
-	out PORTC,Tmp_Reg
-	rcall LCD_Strobe
-	rcall delay_5m
-
-	;green commands
-	ldi Tmp_Reg,0x02		;load upper nibble of 0x28
-	out PORTC,Tmp_Reg		;send it
-	rcall LCD_Strobe
-
-	ldi Tmp_Reg,0x08		;load lower nibble of 0x28
-	out PORTC,Tmp_Reg	
-	rcall LCD_Strobe	
-
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	rcall LCD_Strobe			
-	rcall delay_5m			;wait 5ms
-	ldi Tmp_Reg,0x08		;hide cursor dont shift display
-	out PORTC,Tmp_Reg
-	rcall LCD_Strobe
-
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	rcall LCD_Strobe			
-	rcall delay_5m			;wait 5ms
-	ldi Tmp_Reg,0x01		;Clear and home display
-	out PORTC,Tmp_Reg
-	rcall LCD_Strobe
-
-	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	out PORTC,Tmp_Reg		;Send command to lcd display
-	rcall LCD_Strobe			
-	rcall delay_5m			;wait 5ms
-	ldi Tmp_Reg,0x06		;move cursor right
-	out PORTC,Tmp_Reg
-	rcall LCD_Strobe
-
-	ldi Tmp_Reg,0x0C		;turn on display
-	out PORTC,Tmp_Reg
-	rcall LCD_Strobe
-
-	ret
-
-LCD_Strobe:
-	sbi PORTB,4				;pulse enable
-	rcall delay_200u
-	cbi PORTB,4
-	rcall delay_200u
-	ret
-
-Init_Timer0:
-	ldi Tmp_Reg, 0x05
-	out TCCR0B, Tmp_Reg
-	ret
 
 Init_Timer2:
 	ldi Tmp_Reg, 0
-	sts TCNT2, Tmp_Reg		; clear timer2
-	ldi Tmp_Reg, 200		; set timer2 TOP val to 200
+	sts TCNT2, Tmp_Reg		; clear timer0
+	ldi Tmp_Reg, 200		; set timer0 TOP val to 200
 	sts OCR2A, Tmp_Reg
-	ldi Tmp_Reg, 0x23		; configure timer2 to Fast PWM (mode 7)
+	ldi Tmp_Reg, 0x23		; configure timer0 to Fast PWM (mode 7)
 	sts TCCR2A, Tmp_Reg
 	ldi Tmp_Reg, 0x09
 	sts TCCR2B, Tmp_Reg
-	ldi Tmp_Reg, 80			; set timer2 duty cycle to 0 (DC = OCR2B / 200)
+	ldi Tmp_Reg, 80			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
 	sts OCR2B, Tmp_Reg
 	ret
 
-dispString:
-	ldi r24,10 ; r24 <-- length of the string
-	ldi r30,LOW(2*msg) ; Load Z register low
-	ldi r31,HIGH(2*msg) ; Load Z register high
-	L1:
-	lpm						; r0 <-- first byte
-	swap r0					; Upper nibble in place
-	out PORTC,r0			; Send upper nibble out
-	rcall LCD_Strobe
-	rcall delay_100u		; Wait
-	swap r0					; Lower nibble in place
-	out PORTC,r0			; Send lower nibble out
-	rcall LCD_Strobe
-	rcall delay_100u		; Wait
-	adiw zh:zl,1			; Increment Z pointer
-	dec r24					; Repeat until
-	brne L1					; all characters are out
+Init_LCD:
+	rcall delay_100m		; wait 100ms
+	sbi PORTB, 5			; clear R/S | Write command mode
+	
+	ldi Tmp_Reg, 0x03		; Set 8-bit mode
+	rcall out_byte			; send command
 
+	rcall delay_5m			; wait 5ms
+	rcall out_byte			; send command
+
+	rcall delay_200u		; wait 200us
+	rcall out_byte			; send command
+
+	rcall delay_200u		; wait 200us
+	ldi Tmp_Reg, 0x02		; Set 4-bit mode
+	rcall out_byte			; send command
+	
+	rcall delay_100u		; wait 100us
+	ldi Tmp_Reg, 0x28		; Set interface
+	rcall out_byte			; send command
+
+	rcall delay_100u		; wait 100us
+	ldi Tmp_Reg, 0x08		; hide cursor dont shift display
+	rcall out_byte			; send command
+
+	rcall delay_100u		; wait 100us
+	ldi Tmp_Reg, 0x01		; Clear and home display
+	rcall out_byte			; send command
+
+	rcall delay_100u		; wait 100us
+	ldi Tmp_Reg, 0x06		; move cursor right
+	rcall out_byte			; send command
+
+	rcall delay_100u		; wait 100us
+	ldi Tmp_Reg, 0x0C		; turn on display
+	rcall out_byte			; send command
+
+	rcall delay_100u		; wait 100us
 	ret
 
+display_string:
+	sbi PORTB, 5			; set R/S | Data mode
+	ldi r24,10 				; r24 <-- length of the string
+	ldi r30,LOW(2*msg) 		; Load Z register low
+	ldi r31,HIGH(2*msg) 	; Load Z register high
+	next_char:
+		lpm						; put byte in r0
+		mov Tmp_Reg, r0			; copy byte
+		rcall out_byte			; output byte
+		adiw zh:zl, 1			; Increment Z pointer
+		dec r24					; Repeat until all characters are out
+		brne next_char
+	ret
+
+out_byte:
+	out PORTC, Tmp_Reg		; send upper nibble
+	rcall strobe			; strobe E
+	rcall delay_100u		; wait 100us
+	swap Tmp_Reg			; swap nibbles
+	out PORTC, Tmp_Reg		; send lower nibble
+	rcall strobe			; strobe E
+	rcall delay_100u		; wait 100us
+	ret
+
+strobe:
+	sbi PORTB, 3			; drive E high
+	nop						; 312 ns delay
+	nop
+	nop
+	nop
+	nop
+	cbi PORTB, 3			; drive E low
+	ret
 
 ; 112us delay
 delay_100u:
@@ -260,4 +204,4 @@ delay_100m:
 
 	dec Tmr_Cnt				; Decrement Timer counter
 	brne loop_100m			; if Timer counter is zero, loop
-	ret
+	ret		
