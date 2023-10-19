@@ -49,62 +49,61 @@ msg:
 
 Main:
 	cbi PORTB,5				; put LCD in input mode
-	;rcall dispString
-	;ldi r25, 0xAC
-	;swap r25
+	rcall dispString
+	ldi r25, 0xAC
+	swap r25
 	out PORTC,r25
-	;rcall LCD_Strobe
-	rcall delay_112us
-	;swap r25
-	;out PORTC,r25
 	rcall LCD_Strobe
-	rcall delay_100ms
+	rcall delay_100u
+	swap r25
+	out PORTC,r25
+	rcall LCD_Strobe
+	rcall delay_100m
 	
 	rjmp Main				; loop Main
 
 Init_LCD:
-	; is there anything missing?
 	cbi PORTB,5				; put LCD in command mode
 	cbi PORTB,4				;ensure enable line is low
 
-	rcall delay_100ms		;wait 100ms
-	;ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	;out PORTC,Tmp_Reg		;Send command to lcd display
-	;sbi PORTB,3				;pulse enable
-	;cbi PORTB,3				
-	;rcall delay_5ms			;wait 5ms
+	rcall delay_100m		;wait 100ms
+	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	sbi PORTB,3				;pulse enable
+	cbi PORTB,3				
+	rcall delay_5m			;wait 5ms
 	ldi Tmp_Reg,0x03	 	;Load hex 3 into register
 	out PORTC,Tmp_Reg		;Send command to lcd display
 	rcall LCD_Strobe			
-	rcall delay_5ms			;wait 5ms
+	rcall delay_5m			;wait 5ms
 
-	;ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	;out PORTC,Tmp_Reg		;Send command to lcd display
-	;sbi PORTB,3				;pulse enable
-	;cbi PORTB,3				
-	;rcall delay_5ms			;wait 5ms
+	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	sbi PORTB,3				;pulse enable
+	cbi PORTB,3				
+	rcall delay_5m			;wait 5ms
 	out PORTC,Tmp_Reg		;Send command to lcd display
 	rcall LCD_Strobe
-	rcall delay_208us
+	rcall delay_200u
 
-	;ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	;out PORTC,Tmp_Reg		;Send command to lcd display
-	;sbi PORTB,3				;pulse enable
-	;cbi PORTB,3				
-	;rcall delay_5ms			;wait 5ms
+	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	sbi PORTB,3				;pulse enable
+	cbi PORTB,3				
+	rcall delay_5m			;wait 5ms
 	out PORTC,Tmp_Reg		;Send command to lcd display
 	rcall LCD_Strobe
-	rcall delay_208us
+	rcall delay_200u
 
-	;ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
-	;out PORTC,Tmp_Reg		;Send command to lcd display
-	;sbi PORTB,3				;pulse enable
-	;cbi PORTB,3				
-	;rcall delay_5ms			;wait 5ms
+	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
+	out PORTC,Tmp_Reg		;Send command to lcd display
+	sbi PORTB,3				;pulse enable
+	cbi PORTB,3				
+	rcall delay_5m			;wait 5ms
 	ldi Tmp_Reg,0x02		;Enable 4-bit mode
 	out PORTC,Tmp_Reg
 	rcall LCD_Strobe
-	rcall delay_5ms
+	rcall delay_5m
 
 	;green commands
 	ldi Tmp_Reg,0x02		;load upper nibble of 0x28
@@ -118,7 +117,7 @@ Init_LCD:
 	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
 	out PORTC,Tmp_Reg		;Send command to lcd display
 	rcall LCD_Strobe			
-	rcall delay_5ms			;wait 5ms
+	rcall delay_5m			;wait 5ms
 	ldi Tmp_Reg,0x08		;hide cursor dont shift display
 	out PORTC,Tmp_Reg
 	rcall LCD_Strobe
@@ -126,7 +125,7 @@ Init_LCD:
 	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
 	out PORTC,Tmp_Reg		;Send command to lcd display
 	rcall LCD_Strobe			
-	rcall delay_5ms			;wait 5ms
+	rcall delay_5m			;wait 5ms
 	ldi Tmp_Reg,0x01		;Clear and home display
 	out PORTC,Tmp_Reg
 	rcall LCD_Strobe
@@ -134,7 +133,7 @@ Init_LCD:
 	ldi Tmp_Reg,0x00		;load 0 into register to compensate for upper/lower nibble
 	out PORTC,Tmp_Reg		;Send command to lcd display
 	rcall LCD_Strobe			
-	rcall delay_5ms			;wait 5ms
+	rcall delay_5m			;wait 5ms
 	ldi Tmp_Reg,0x06		;move cursor right
 	out PORTC,Tmp_Reg
 	rcall LCD_Strobe
@@ -147,9 +146,9 @@ Init_LCD:
 
 LCD_Strobe:
 	sbi PORTB,4				;pulse enable
-	rcall delay_208us
+	rcall delay_200u
 	cbi PORTB,4
-	rcall delay_208us
+	rcall delay_200u
 	ret
 
 Init_Timer0:
@@ -179,11 +178,11 @@ dispString:
 	swap r0					; Upper nibble in place
 	out PORTC,r0			; Send upper nibble out
 	rcall LCD_Strobe
-	rcall delay_112us		; Wait
+	rcall delay_100u		; Wait
 	swap r0					; Lower nibble in place
 	out PORTC,r0			; Send lower nibble out
 	rcall LCD_Strobe
-	rcall delay_112us		; Wait
+	rcall delay_100u		; Wait
 	adiw zh:zl,1			; Increment Z pointer
 	dec r24					; Repeat until
 	brne L1					; all characters are out
@@ -191,78 +190,74 @@ dispString:
 	ret
 
 
-;delay_112us
-delay_112us:
-	ldi Tmr_Cnt,7			;init timer config
-	ldi Tmp_Reg, 0x01
+; 112us delay
+delay_100u:
+	ldi Tmr_Cnt,7			; set  timer overflow counter to 7
+	ldi Tmp_Reg, 0x01		; set prescaler to none
 	out TCCR0B, Tmp_Reg
 
 	loop_100u:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
+	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
 	rjmp loop_100u
 
-	ldi Tmp_Reg, 0x01
-	out TIFR0, Tmp_Reg
-	dec Tmr_Cnt				; Decrement Timer counter
-	tst Tmr_Cnt				; Is Timer counter zero?
-	brne loop_100u			; No, jump to L1, Yes return
-	;ldi Tmp_Reg, 0x00		;Load config zero into timer before exiting to stop it
-	;out TCCR0B, Tmp_Reg
-	ret
+	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
+	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
 
-;delay_208us
-delay_208us:
-	ldi Tmr_Cnt,13			;init timer config
-	ldi Tmp_Reg, 0x01
+	dec Tmr_Cnt				; Decrement Timer counter
+	brne loop_100u			; if Timer counter is zero, loop
+	ret						; otherwise, return
+
+; 208us delay
+delay_200u:
+	ldi Tmr_Cnt, 13			; set timer overflow counter to 13
+	ldi Tmp_Reg, 0x01		; set prescaler to none
 	out TCCR0B, Tmp_Reg
 
 	loop_200u:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
+	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
 	rjmp loop_200u
 
-	ldi Tmp_Reg, 0x01
-	out TIFR0, Tmp_Reg
-	dec Tmr_Cnt				; Decrement Timer counter
-	tst Tmr_Cnt				; Is Timer counter zero?
-	brne loop_200u			; No, jump to L1B, Yes return
-	;ldi Tmp_Reg, 0x00		;Load config zero into timer before exiting to stop it
-	;out TCCR0B, Tmp_Reg
-	ret
+	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
+	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
 
-;delay_5.12ms
-delay_5ms:
-	ldi Tmr_Cnt,40			;init timer config
-	ldi Tmp_Reg, 0x02
+	dec Tmr_Cnt				; Decrement Timer counter
+	brne loop_200u			; if Timer counter is zero, loop
+	ret						; otherwise, return
+
+; 5.12ms delay
+delay_5m:
+	ldi Tmr_Cnt, 40			; set timer overflow counter to 40
+	ldi Tmp_Reg, 0x02		; set prescaler to 8
 	out TCCR0B, Tmp_Reg
 
 	loop_5m:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
+	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
 	rjmp loop_5m
 
-	ldi Tmp_Reg, 0x01
-	out TIFR0, Tmp_Reg
-	dec Tmr_Cnt				; Decrement Timer counter
-	tst Tmr_Cnt				; Is Timer counter zero?
-	brne loop_5m			; No, jump to L1C, Yes return
-	ret
+	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
+	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
 
-;delay_100.35ms
-delay_100ms:
-	ldi Tmr_Cnt,98			;init timer config
-	ldi Tmp_Reg, 0x03
+	dec Tmr_Cnt				; Decrement Timer counter
+	brne loop_5m			; if Timer counter is zero, loop
+	ret						; otherwise, return
+
+; 100.35ms delay
+delay_100m:
+	ldi Tmr_Cnt, 98			; set timer overflow counter to 98
+	ldi Tmp_Reg, 0x03		; set prescaler to 64
 	out TCCR0B, Tmp_Reg
 
 	loop_100m:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop Running
+	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
 	rjmp loop_100m
 
-	ldi Tmp_Reg, 0x01
-	out TIFR0, Tmp_Reg
+	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
+	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
+
 	dec Tmr_Cnt				; Decrement Timer counter
-	tst Tmr_Cnt				; Is Timer counter zero?
-	brne loop_100m			; No, jump to L1D, Yes return
+	brne loop_100m			; if Timer counter is zero, loop
 	ret
