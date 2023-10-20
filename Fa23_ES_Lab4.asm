@@ -61,80 +61,90 @@ Init_Timer2:
 
 Init_LCD:
 	rcall delay_100m		; wait to power up LCD
-	cbi PORTB, 5			; clear R/S | Instruction mode
-	nop
 	
 	ldi Tmp_Data, 0x30		; Set 8-bit mode
-	rcall out_nibble
+	rcall send_nibble
 	rcall delay_5m
 
-	rcall out_nibble		; Set 8-bit mode
+	rcall send_nibble		; Set 8-bit mode
 	rcall delay_200u
 
-	rcall out_nibble		; Set 8-bit mode
+	rcall send_nibble		; Set 8-bit mode
 	rcall delay_200u
 
 	ldi Tmp_Data, 0x20		; Set 4-bit mode
-	rcall out_nibble
+	rcall send_nibble
 	rcall delay_5m
 	
 	ldi Tmp_Data, 0x28		; Set interface
-	rcall out_byte
+	rcall send_instr
 	rcall delay_100u
 
 	ldi Tmp_Data, 0x08		; dont shift display, hide cursor 
-	rcall out_byte
+	rcall send_instr
 	rcall delay_100u
 
 	ldi Tmp_Data, 0x01		; Clear and home display
-	rcall out_byte
+	rcall send_instr
 	rcall delay_5m
 
 	ldi Tmp_Data, 0x06		; move cursor right
-	rcall out_byte
+	rcall send_instr
 	rcall delay_100u
 
 	ldi Tmp_Data, 0x0C		; turn on display
-	rcall out_byte
+	rcall send_instr
 	rcall delay_100u
 	
 	ret
 
 display_string:
+	ldi Tmp_Data, 0x80		; set DDRAM address to 0x00
+	rcall send_instr
+	
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
 	ldi r24,10 				; r24 <-- length of the string
-	ldi r30,LOW(2*msg) 		; Load Z register low
-	ldi r31,HIGH(2*msg) 	; Load Z register high
+	ldi r30,LOW(msg) 		; Load Z register low
+	ldi r31,HIGH(msg)		; Load Z register high
+	lsl ZL					; shift the pointer one bit left for the lpm instruction
+    rol ZH
 	next_char:
 		lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
-		rcall out_byte		; output byte
+		rcall send_instr		; output byte
 		dec r24				; Repeat until all characters are out
 		brne next_char
 		ret
 
-out_byte:
-	rcall out_nibble		; send upper nibble
+send_instr:
+	cbi PORTB, 5			; clear R/S | select instruction register
+	cbi PORTB, 3			; clear Enable
+	rcall send_nibble		; send upper nibble
 	rcall delay_100u
 	swap Tmp_Data			; swap nibbles
-	rcall out_nibble		; send lower nibble
+	rcall send_nibble		; send lower nibble
 	rcall delay_100u
 	ret
 
-out_nibble:
-	out PORTC, Tmp_Data		; send upper nibble
-	nop
-	rcall strobe			; strobe E
+send_string:
+	sbi PORTB, 5			; set R/S | select data register
+	cbi PORTB, 3			; clear Enable
+	rcall send_nibble		; send upper nibble
+	swap Tmp_Data			; swap nibbles
+	rcall send_nibble		; send lower nibble
 	ret
 
-strobe:
-	sbi PORTB, 3			; drive E high
+send_nibble:
+	out PORTC, Tmp_Data		; send upper nibble
+	nop
+	sbi PORTB, 3			; drive E high (start strobe)
 	nop						; 312 ns delay
 	nop
 	nop
 	nop
 	nop
 	cbi PORTB, 3			; drive E low
+	rcall delay_100u		; give LCD time to process data
 	ret
 
 ; 112us delay
