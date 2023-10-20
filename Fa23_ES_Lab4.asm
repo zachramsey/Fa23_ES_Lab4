@@ -60,73 +60,68 @@ Init_Timer2:
 	ret
 
 Init_LCD:
-	rcall delay_100m		; wait 100ms
-	cbi PORTB, 5			; clear R/S | Write command mode
+	rcall delay_100m		; wait to power up LCD
+	cbi PORTB, 5			; clear R/S | Instruction mode
+	nop
 	
-	ldi Tmp_Data, 0x03		; Set 8-bit mode
-	rcall out_nibble		; send command
-	rcall delay_5m			; wait 5ms
+	ldi Tmp_Data, 0x30		; Set 8-bit mode
+	rcall out_nibble
+	rcall delay_5m
 
-	rcall out_nibble		; send command
-	rcall delay_200u		; wait 200us
+	rcall out_nibble		; Set 8-bit mode
+	rcall delay_200u
 
-	rcall out_nibble		; send command
-	rcall delay_200u		; wait 200us
+	rcall out_nibble		; Set 8-bit mode
+	rcall delay_200u
 
-	ldi Tmp_Data, 0x02		; Set 4-bit mode
-	rcall out_nibble		; send command
-	rcall delay_5m			; wait 5ms
+	ldi Tmp_Data, 0x20		; Set 4-bit mode
+	rcall out_nibble
+	rcall delay_5m
 	
 	ldi Tmp_Data, 0x28		; Set interface
-	rcall out_byte			; send command
-	rcall delay_100u		; wait 100us
+	rcall out_byte
+	rcall delay_100u
 
-	ldi Tmp_Data, 0x08		; hide cursor dont shift display
-	rcall out_byte			; send command
-	rcall delay_100u		; wait 100us
+	ldi Tmp_Data, 0x08		; dont shift display, hide cursor 
+	rcall out_byte
+	rcall delay_100u
 
 	ldi Tmp_Data, 0x01		; Clear and home display
-	rcall out_byte			; send command
-	rcall delay_5m			; wait 5ms
+	rcall out_byte
+	rcall delay_5m
 
 	ldi Tmp_Data, 0x06		; move cursor right
-	rcall out_byte			; send command
-	rcall delay_100u		; wait 100us
+	rcall out_byte
+	rcall delay_100u
 
 	ldi Tmp_Data, 0x0C		; turn on display
-	rcall out_byte			; send command
-	rcall delay_100u		; wait 100us
-
-	sbi PORTB, 5			; set R/S | Data mode
+	rcall out_byte
+	rcall delay_100u
 	
 	ret
 
 display_string:
+	sbi PORTB, 5			; set R/S | Data mode
+	nop
 	ldi r24,10 				; r24 <-- length of the string
 	ldi r30,LOW(2*msg) 		; Load Z register low
 	ldi r31,HIGH(2*msg) 	; Load Z register high
 	next_char:
-		lpm	Tmp_Data, Z		; load byte from prog mem at Z in Tmp_Reg
+		lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
 		rcall out_byte		; output byte
-		adiw zh:zl, 1		; Increment Z pointer
 		dec r24				; Repeat until all characters are out
 		brne next_char
 		ret
 
 out_byte:
-	out PORTC, Tmp_Data		; send upper nibble
-	nop
-	rcall strobe			; strobe E
-	rcall delay_100u		; wait 100us
+	rcall out_nibble		; send upper nibble
+	rcall delay_100u
 	swap Tmp_Data			; swap nibbles
-	out PORTC, Tmp_Data		; send lower nibble
-	nop
-	rcall strobe			; strobe E
-	rcall delay_100u		; wait 100us
+	rcall out_nibble		; send lower nibble
+	rcall delay_100u
 	ret
 
 out_nibble:
-	swap Tmp_Data			; swap nibbles
 	out PORTC, Tmp_Data		; send upper nibble
 	nop
 	rcall strobe			; strobe E
