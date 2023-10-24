@@ -30,21 +30,52 @@ sbi DDRD,3  				; Board Pin 3 OC0B -> Board O/P: PD3
 .def Tmr_Cnt = R18			; Timer counter
 .def RPG_Curr = R19			; Current RPG input state
 .def RPG_Prev = R20			; previous RPG input state
+.def DC = R21				; Fan/Timer0 duty cycle
 
 ; Create a static string in program memory.
 rjmp Init					;Dont execute prog mem
 msg: 
-	.DB "Hello A.J."
+	.DB "wassup    "
 	.DW 0
 
 ;===================| Main Loop |====================
 Init:
 	rcall Init_LCD			; initialize LCD
 	rcall Init_Timer2		; init timer2 for PWM
-	rcall Send_String	; display string on LCD
+	rcall Send_String		; display string on LCD
 
 Main:
+	; check for RPG rotation
+	in RPG_Curr, PIND
+	andi RPG_Curr, 0x60		; Mask bits 6 and 5
+	cpi RPG_Curr, 0x60		; if both are set, jump to RPG_Detent
+	breq RPG_Detent
+	mov RPG_Prev, RPG_Curr	; otherwise update previous input state
+
 	rjmp Main				; loop Main
+
+RPG_Detent:
+	cpi RPG_Prev, 0x20 		; if prev state was '01', jump to Incr
+	breq Incr
+	cpi RPG_Prev, 0x40 		; if prev state was '10', jump to Decr
+	breq Decr
+	rjmp Main				; otherwise, jump to Main
+Incr:
+	ldi RPG_Prev, 0x60		; set detent input state
+	cpi DC, 100				; if DC is at 100%, jump to main
+	breq Main
+	inc DC					; increment DC 2x
+	inc DC
+	sts OCR2B, DC			; update timer0 duty cycle
+	rjmp Main
+Decr:
+	ldi RPG_Prev, 0x60		; set detent input state
+	cpi DC, 0				; if DC is at 0%, jump to main
+	breq Main
+	dec DC					; decrement DC 2x
+	dec DC
+	sts OCR2B, DC		; update timer0 duty cycle
+	rjmp Main
 
 Init_Timer2:
 	ldi Tmp_Reg, 0
@@ -55,7 +86,8 @@ Init_Timer2:
 	sts TCCR2A, Tmp_Reg
 	ldi Tmp_Reg, 0x09
 	sts TCCR2B, Tmp_Reg
-	ldi Tmp_Reg, 80			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
+	ldi DC, 0				; initialize duty cycle counter to 0
+	ldi Tmp_Reg, 0			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
 	sts OCR2B, Tmp_Reg
 	ret
 
