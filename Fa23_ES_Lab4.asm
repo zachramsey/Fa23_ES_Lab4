@@ -11,18 +11,18 @@
 
 ;==================| Configure I/O |=================
 ; Output to LCD
-sbi DDRB,3  				; O/P: PB3 -> LCD Enable
-sbi DDRB,5					; O/P: PB5 -> LCD Register Select
+sbi DDRB, 3  				; O/P: PB3 -> LCD Enable
+sbi DDRB, 5					; O/P: PB5 -> LCD Register Select
 sbi DDRC, 0					; O/P: PC0 -> LCD Data Bit 4
 sbi DDRC, 1					; O/P: PC1 -> LCD Data Bit 5
 sbi DDRC, 2					; O/P: PC2 -> LCD Data Bit 6
 sbi DDRC, 3					; O/P: PC3 -> LCD Data Bit 7
+; Output to fan
+sbi DDRD, 3  				; Board Pin 3 OC0B -> Board O/P: PD3
 ; Input from pushbuttons
-cbi DDRD,7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
-cbi DDRD,6					; Board Pin 6 RPG A -> Board I/P: PD6
-cbi DDRD,5  				; Board Pin 5 RPG B -> Board I/P: PD5
-
-sbi DDRD,3  				; Board Pin 3 OC0B -> Board O/P: PD3
+cbi DDRD, 7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
+cbi DDRD, 6					; Board Pin 6 RPG A -> Board I/P: PD6
+cbi DDRD, 5  				; Board Pin 5 RPG B -> Board I/P: PD5
 
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
@@ -54,6 +54,7 @@ Main:
 
 	rjmp Main				; loop Main
 
+;==================| RPG Handling |==================
 RPG_Detent:
 	cpi RPG_Prev, 0x20 		; if prev state was '01', jump to Incr
 	breq Incr
@@ -74,9 +75,10 @@ Decr:
 	breq Main
 	dec DC					; decrement DC 2x
 	dec DC
-	sts OCR2B, DC		; update timer0 duty cycle
+	sts OCR2B, DC			; update timer0 duty cycle
 	rjmp Main
 
+;=================| Initialization |=================
 Init_Timer2:
 	ldi Tmp_Reg, 0
 	sts TCNT2, Tmp_Reg		; clear timer0
@@ -131,16 +133,15 @@ Init_LCD:
 	ret
 
 ;===============| LCD Communication |================
-
 Send_String:
 	ldi Tmp_Data, 0x80		; set DDRAM address to 0x00
 	rcall Send_Instr
 	
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
-	ldi r24,10 				; r24 <-- length of the string
-	ldi r30,LOW(2*msg) 		; Load Z register low
-	ldi r31,HIGH(2*msg)		; Load Z register high
+	ldi r24, 10 			; r24 <-- length of the string
+	ldi r30, LOW(2*msg) 	; Load Z register low
+	ldi r31, HIGH(2*msg)	; Load Z register high
 	Next_Char:
 		lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
 		sbi PORTB, 5		; set R/S | select data register
