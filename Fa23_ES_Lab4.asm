@@ -41,7 +41,7 @@ msg:
 Init:
 	rcall Init_LCD			; initialize LCD
 	rcall Init_Timer2		; init timer2 for PWM
-	rcall display_string	; display string on LCD
+	rcall Send_String	; display string on LCD
 
 Main:
 	rjmp Main				; loop Main
@@ -60,81 +60,77 @@ Init_Timer2:
 	ret
 
 Init_LCD:
-	rcall delay_100m		; wait to power up LCD
+	rcall Delay_100m		; wait to power up LCD
 	
-	ldi Tmp_Data, 0x30		; Set 8-bit mode
-	rcall send_nibble
-	rcall delay_5m
+	ldi Tmp_Data, 0x03		; Set 8-bit mode
+	rcall Send_Nibble
+	rcall Delay_5m
 
-	rcall send_nibble		; Set 8-bit mode
-	rcall delay_200u
+	rcall Send_Nibble		; Set 8-bit mode
+	rcall Delay_200u
 
-	rcall send_nibble		; Set 8-bit mode
-	rcall delay_200u
+	rcall Send_Nibble		; Set 8-bit mode
+	rcall Delay_200u
 
-	ldi Tmp_Data, 0x20		; Set 4-bit mode
-	rcall send_nibble
-	rcall delay_5m
+	ldi Tmp_Data, 0x02		; Set 4-bit mode
+	rcall Send_Nibble
+	rcall Delay_5m
 	
 	ldi Tmp_Data, 0x28		; Set interface
-	rcall send_instr
-	rcall delay_100u
+	rcall Send_Instr
+	rcall Delay_100u
 
 	ldi Tmp_Data, 0x08		; dont shift display, hide cursor 
-	rcall send_instr
-	rcall delay_100u
+	rcall Send_Instr
+	rcall Delay_100u
 
 	ldi Tmp_Data, 0x01		; Clear and home display
-	rcall send_instr
-	rcall delay_5m
+	rcall Send_Instr
+	rcall Delay_5m
 
 	ldi Tmp_Data, 0x06		; move cursor right
-	rcall send_instr
-	rcall delay_100u
+	rcall Send_Instr
+	rcall Delay_100u
 
 	ldi Tmp_Data, 0x0C		; turn on display
-	rcall send_instr
-	rcall delay_100u
+	rcall Send_Instr
+	rcall Delay_100u
 	
 	ret
 
-display_string:
+;===============| LCD Communication |================
+
+Send_String:
 	ldi Tmp_Data, 0x80		; set DDRAM address to 0x00
-	rcall send_instr
+	rcall Send_Instr
 	
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
 	ldi r24,10 				; r24 <-- length of the string
-	ldi r30,LOW(msg) 		; Load Z register low
-	ldi r31,HIGH(msg)		; Load Z register high
-	lsl ZL					; shift the pointer one bit left for the lpm instruction
-    rol ZH
-	next_char:
+	ldi r30,LOW(2*msg) 		; Load Z register low
+	ldi r31,HIGH(2*msg)		; Load Z register high
+	Next_Char:
 		lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
-		rcall send_instr		; output byte
+		sbi PORTB, 5		; set R/S | select data register
+		cbi PORTB, 3		; clear Enable
+		swap Tmp_Data		; swap nibbles
+		rcall Send_Nibble	; send upper nibble
+		swap Tmp_Data		; swap nibbles back
+		rcall Send_Nibble	; send lower nibble
 		dec r24				; Repeat until all characters are out
-		brne next_char
+		brne Next_Char
 		ret
 
-send_instr:
+Send_Instr:
 	cbi PORTB, 5			; clear R/S | select instruction register
 	cbi PORTB, 3			; clear Enable
-	rcall send_nibble		; send upper nibble
-	rcall delay_100u
 	swap Tmp_Data			; swap nibbles
-	rcall send_nibble		; send lower nibble
-	rcall delay_100u
+	rcall Send_Nibble		; send upper nibble
+	swap Tmp_Data			; swap nibbles back
+	rcall Send_Nibble		; send lower nibble
 	ret
 
-send_string:
-	sbi PORTB, 5			; set R/S | select data register
-	cbi PORTB, 3			; clear Enable
-	rcall send_nibble		; send upper nibble
-	swap Tmp_Data			; swap nibbles
-	rcall send_nibble		; send lower nibble
-	ret
-
-send_nibble:
+Send_Nibble:
 	out PORTC, Tmp_Data		; send upper nibble
 	nop
 	sbi PORTB, 3			; drive E high (start strobe)
@@ -144,77 +140,43 @@ send_nibble:
 	nop
 	nop
 	cbi PORTB, 3			; drive E low
-	rcall delay_100u		; give LCD time to process data
+	rcall Delay_100u		; give LCD time to process data
 	ret
 
-; 112us delay
-delay_100u:
-	ldi Tmr_Cnt,7				; set  timer overflow counter to 7
-	ldi Tmp_Reg, 0x01			; set prescaler to none
-	out TCCR0B, Tmp_Reg
+;==================| Time Delays |===================
 
-	loop_100u:
-		in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-		sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
-		rjmp loop_100u
+Delay_100u:					; 112us delay
+	ldi Tmr_Cnt,7			; set  timer overflow counter to 7
+	ldi Tmp_Reg, 0x01		; set prescaler to none
+	out TCCR0B, Tmp_Reg		; output prescaler configurationv
+	rjmp Delay_loop			; begin delay
 
-		ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
-		out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
+Delay_200u:					; 208us delay
+	ldi Tmr_Cnt, 13			; set timer overflow counter to 13
+	ldi Tmp_Reg, 0x01		; set prescaler to none
+	out TCCR0B, Tmp_Reg		; output prescaler configuration
+	rjmp Delay_loop			; begin delay
 
-		dec Tmr_Cnt				; Decrement Timer counter
-		brne loop_100u			; if Timer counter is zero, loop
-		ret						; otherwise, return
+Delay_5m:					; 5.12ms delay
+	ldi Tmr_Cnt, 40			; set timer overflow counter to 40
+	ldi Tmp_Reg, 0x02		; set prescaler to 8
+	out TCCR0B, Tmp_Reg		; output prescaler configuration
+	rjmp Delay_loop			; begin delay
 
-; 208us delay
-delay_200u:
-	ldi Tmr_Cnt, 13				; set timer overflow counter to 13
-	ldi Tmp_Reg, 0x01			; set prescaler to none
-	out TCCR0B, Tmp_Reg
+Delay_100m:					; 100.35ms delay
+	ldi Tmr_Cnt, 98			; set timer overflow counter to 98
+	ldi Tmp_Reg, 0x03		; set prescaler to 64
+	out TCCR0B, Tmp_Reg		; output prescaler configuration
+	rjmp Delay_loop			; begin delay
 
-	loop_200u:
-		in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-		sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
-		rjmp loop_200u
+Delay_loop:
+	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
+	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
+	rjmp Delay_loop
 
-		ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
-		out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
+	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
+	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
 
-		dec Tmr_Cnt				; Decrement Timer counter
-		brne loop_200u			; if Timer counter is zero, loop
-		ret						; otherwise, return
-
-; 5.12ms delay
-delay_5m:
-	ldi Tmr_Cnt, 40				; set timer overflow counter to 40
-	ldi Tmp_Reg, 0x02			; set prescaler to 8
-	out TCCR0B, Tmp_Reg
-
-	loop_5m:
-		in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-		sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
-		rjmp loop_5m
-
-		ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
-		out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
-
-		dec Tmr_Cnt				; Decrement Timer counter
-		brne loop_5m			; if Timer counter is zero, loop
-		ret						; otherwise, return
-
-; 100.35ms delay
-delay_100m:
-	ldi Tmr_Cnt, 98				; set timer overflow counter to 98
-	ldi Tmp_Reg, 0x03			; set prescaler to 64
-	out TCCR0B, Tmp_Reg
-
-	loop_100m:
-		in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
-		sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
-		rjmp loop_100m
-
-		ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
-		out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
-
-		dec Tmr_Cnt				; Decrement Timer counter
-		brne loop_100m			; if Timer counter is zero, loop
-		ret		
+	dec Tmr_Cnt				; Decrement Timer counter
+	brne Delay_loop			; if Timer counter is zero, loop
+	ret						; otherwise, return
