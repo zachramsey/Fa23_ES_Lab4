@@ -148,13 +148,14 @@ PCINT2_ISR:
 	push Tmp_Reg
 	in RPG_Curr, PIND
 	andi RPG_Curr, 0x30		; Mask bits 5 and 4
-	cpi RPG_Curr, 0x30		; if one is not set, return
-	brne PCINT2_Cleanup
+	cpi RPG_Curr, 0x30		; if neither is set, return
+	breq RPG_Detent
+	reti
+RPG_Detent:
 	cpi RPG_Prev, 0x10 		; if prev state was '01', branch to Incr
 	breq Incr
 	cpi RPG_Prev, 0x20 		; if prev state was '10', branch to Decr
 	breq Decr
-	; rjmp PCINT2_Cleanup		; otherwise, something went wrong; just leave
 Incr:
 	cpi DC, 200				; if DC is at 100%, return
 	breq PCINT2_Cleanup
@@ -166,8 +167,9 @@ Decr:
 	breq PCINT2_Cleanup
 	dec DC					; decrement DC counter
 	sts OCR2B, DC			; update timer0 duty cycle
+	rjmp PCINT2_Cleanup
 PCINT2_Cleanup:
-	mov RPG_Prev, RPG_Curr	; update previous input state
+	ldi RPG_Prev, 0x30		; update RPG state to '11'
 	pop Tmp_Reg				; restore status register
 	out SREG, Tmp_Reg
 	pop Tmp_Reg				; restore temp register
