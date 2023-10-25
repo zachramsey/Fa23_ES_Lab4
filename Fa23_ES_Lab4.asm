@@ -20,7 +20,7 @@ jmp PCINT2_ISR				; Jump to PCINT2 ISR
 .org 0x0034					; Start of program memory
 rjmp Start
 msg:						; Create a static string in program memory.
-	.DB "wassup    "
+	.DB "Hi John!  "
 	.DW 0
 
 Start:
@@ -124,55 +124,47 @@ Main:
 
 ;==============| PBS Interupt Handling |=============
 INT0_ISR:
-	push Tmp_Reg			; save temp register
-	in Tmp_Reg, SREG		; save status register
-	push Tmp_Reg
 	lds Tmp_Reg, OCR2B		; load timer2 duty cycle into Tmp_Reg
-	cp Tmp_Reg, DC			; if timer2 duty cycle is DC, turn fan off
-	breq Fan_Off
+	cpi Tmp_Reg, 5			; if timer2 duty cycle is DC, turn fan off
+	brge Fan_Off
 	sts OCR2B, DC			; otherwise, turn fan on
-	rjmp INT0_Cleanup
+	rcall Delay_100u
+	reti
 Fan_Off:
 	ldi Tmp_Reg, 0			; set timer2 duty cycle to 0
 	sts OCR2B, Tmp_Reg
-INT0_Cleanup:
-	pop Tmp_Reg				; restore status register
-	out SREG, Tmp_Reg
-	pop Tmp_Reg				; restore temp register
+	rcall Delay_100u
 	reti
 
 ;==============| RPG Interupt Handling |=============
 PCINT2_ISR:
-	push Tmp_Reg			; save temp register
-	in Tmp_Reg, SREG		; save status register
-	push Tmp_Reg
 	in RPG_Curr, PIND
 	andi RPG_Curr, 0x30		; Mask bits 5 and 4
-	cpi RPG_Curr, 0x30		; if neither is set, return
+	cpi RPG_Curr, 0x30		; if either is not set, return
 	breq RPG_Detent
+	mov RPG_Prev, RPG_Curr	; update RPG state
 	reti
 RPG_Detent:
 	cpi RPG_Prev, 0x10 		; if prev state was '01', branch to Incr
 	breq Incr
 	cpi RPG_Prev, 0x20 		; if prev state was '10', branch to Decr
 	breq Decr
+	reti
 Incr:
+	ldi RPG_Prev, 0x30		; update RPG state to '11'
 	cpi DC, 200				; if DC is at 100%, return
-	breq PCINT2_Cleanup
+	breq PCINT2_Exit
 	inc DC
 	sts OCR2B, DC			; update timer0 duty cycle
-	rjmp PCINT2_Cleanup
+	reti
 Decr:
+	ldi RPG_Prev, 0x30		; update RPG state to '11'
 	cpi DC, 0				; if DC is at 0%, return
-	breq PCINT2_Cleanup
+	breq PCINT2_Exit
 	dec DC					; decrement DC counter
 	sts OCR2B, DC			; update timer0 duty cycle
-	rjmp PCINT2_Cleanup
-PCINT2_Cleanup:
-	ldi RPG_Prev, 0x30		; update RPG state to '11'
-	pop Tmp_Reg				; restore status register
-	out SREG, Tmp_Reg
-	pop Tmp_Reg				; restore temp register
+	reti
+PCINT2_Exit:
 	reti
 
 ;===============| LCD Communication |================
