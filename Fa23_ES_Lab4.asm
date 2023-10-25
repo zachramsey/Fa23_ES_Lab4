@@ -7,8 +7,20 @@
 
 .include "m328Pdef.inc"		; microcontroller-specific definitions
 .cseg
-.org 0
+.cseg
+.org 0x0000
+jmp Start					; Skip to start
 
+.org 0x000A					; PCINT2 vector
+jmp PCINT2_ISR				; Jump to PCINT2 ISR
+
+.org 0x0034					; Start of program memory
+rjmp Start
+msg:						; Create a static string in program memory.
+	.DB "wassup    "
+	.DW 0
+
+Start:
 ;==================| Configure I/O |=================
 ; Inputs
 cbi DDRD, 2					; uC PD7 (INT0)		 <- PBS (Pushbutton)
@@ -29,29 +41,31 @@ sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 .def Tmr_Cnt = R18			; Timer counter
 .def RPG_Curr = R19			; Current RPG input state
 .def RPG_Prev = R20			; previous RPG input state
-.def DC = R21			; Duty cycle counter
-
-; Create a static string in program memory.
-rjmp Init					;Dont execute prog mem
-msg: 
-	.DB "wassup    "
-	.DW 0
+.def DC = R21				; Duty cycle counter
 
 ;===================| Main Loop |====================
-Init:
-	rcall Init_LCD			; initialize LCD
-	rcall Init_Timer2		; init timer2 for PWM
-	rcall Send_String		; display string on LCD
+rcall Init_LCD			; initialize LCD
+rcall Init_Timer2		; init timer2 for PWM
+rcall Send_String		; display string on LCD
+
+; Initialize RPG Interupt
+ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT16 and PCINT17
+sts PCMSK2, Tmp_Reg
+ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2
+sts PCICR, Tmp_Reg
+sei
 
 Main:
-	; check for RPG rotation
+	nop
+	rjmp Main				; loop Main
+
+PCINT2_ISR:
 	in RPG_Curr, PIND
-	andi RPG_Curr, 0x30		; Mask bits 6 and 5
+	andi RPG_Curr, 0x30		; Mask bits 5 and 4
 	cpi RPG_Curr, 0x30		; if both are set, jump to RPG_Detent
 	breq RPG_Detent
 	mov RPG_Prev, RPG_Curr	; otherwise update previous input state
-
-	rjmp Main				; loop Main
+	reti
 
 ;==================| RPG Handling |==================
 RPG_Detent:
@@ -59,23 +73,20 @@ RPG_Detent:
 	breq Incr
 	cpi RPG_Prev, 0x20 		; if prev state was '10', jump to Decr
 	breq Decr
-	rjmp Main				; otherwise, jump to Main
 Incr:
 	ldi RPG_Prev, 0x30		; set detent input state
 	cpi DC, 200				; if DC is at 100%, jump to main
 	breq Main
 	inc DC
 	sts OCR2B, DC			; update timer0 duty cycle
-	mov Tmp_Data, DC		; copy DC to Tmp_Data
-
-	rjmp Main
+	reti
 Decr:
 	ldi RPG_Prev, 0x30		; set detent input state
 	cpi DC, 0				; if DC is at 0%, jump to main
 	breq Main
 	dec DC					; decrement DC counter
 	sts OCR2B, DC			; update timer0 duty cycle
-	rjmp Main
+	reti
 
 ;=================| Initialization |=================
 Init_Timer2:
