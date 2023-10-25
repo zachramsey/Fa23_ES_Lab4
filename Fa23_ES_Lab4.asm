@@ -10,19 +10,18 @@
 .org 0
 
 ;==================| Configure I/O |=================
-; Output to LCD
-sbi DDRB, 3  				; O/P: PB3 -> LCD Enable
-sbi DDRB, 5					; O/P: PB5 -> LCD Register Select
-sbi DDRC, 0					; O/P: PC0 -> LCD Data Bit 4
-sbi DDRC, 1					; O/P: PC1 -> LCD Data Bit 5
-sbi DDRC, 2					; O/P: PC2 -> LCD Data Bit 6
-sbi DDRC, 3					; O/P: PC3 -> LCD Data Bit 7
-; Output to fan
-sbi DDRD, 3  				; Board Pin 3 OC0B -> Board O/P: PD3
-; Input from pushbuttons
-cbi DDRD, 7					; Board Pin 7 Pushbutton A -> Board I/P: PD7
-cbi DDRD, 6					; Board Pin 6 RPG A -> Board I/P: PD6
-cbi DDRD, 5  				; Board Pin 5 RPG B -> Board I/P: PD5
+; Inputs
+cbi DDRD, 2					; uC PD7 (INT0)		 <- PBS (Pushbutton)
+cbi DDRD, 4					; uC PD6 (PCINT[16]) <- RPG A
+cbi DDRD, 5  				; uC PD5 (PCINT[17]) <- RPG B
+; Outputs
+sbi DDRB, 3  				; uC PB3 		-> LCD E (Enable)
+sbi DDRB, 5					; uC PB5 		-> LCD RS (Register Select)
+sbi DDRC, 0					; uC PC0 		-> LCD DB4
+sbi DDRC, 1					; uC PC1 		-> LCD DB5
+sbi DDRC, 2					; uC PC2 		-> LCD DB6
+sbi DDRC, 3					; uC PC3 		-> LCD DB7
+sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
@@ -30,7 +29,7 @@ cbi DDRD, 5  				; Board Pin 5 RPG B -> Board I/P: PD5
 .def Tmr_Cnt = R18			; Timer counter
 .def RPG_Curr = R19			; Current RPG input state
 .def RPG_Prev = R20			; previous RPG input state
-.def DC = R21				; Fan/Timer0 duty cycle
+.def DC = R21			; Duty cycle counter
 
 ; Create a static string in program memory.
 rjmp Init					;Dont execute prog mem
@@ -47,8 +46,8 @@ Init:
 Main:
 	; check for RPG rotation
 	in RPG_Curr, PIND
-	andi RPG_Curr, 0x60		; Mask bits 6 and 5
-	cpi RPG_Curr, 0x60		; if both are set, jump to RPG_Detent
+	andi RPG_Curr, 0x30		; Mask bits 6 and 5
+	cpi RPG_Curr, 0x30		; if both are set, jump to RPG_Detent
 	breq RPG_Detent
 	mov RPG_Prev, RPG_Curr	; otherwise update previous input state
 
@@ -56,25 +55,25 @@ Main:
 
 ;==================| RPG Handling |==================
 RPG_Detent:
-	cpi RPG_Prev, 0x20 		; if prev state was '01', jump to Incr
+	cpi RPG_Prev, 0x10 		; if prev state was '01', jump to Incr
 	breq Incr
-	cpi RPG_Prev, 0x40 		; if prev state was '10', jump to Decr
+	cpi RPG_Prev, 0x20 		; if prev state was '10', jump to Decr
 	breq Decr
 	rjmp Main				; otherwise, jump to Main
 Incr:
-	ldi RPG_Prev, 0x60		; set detent input state
-	cpi DC, 100				; if DC is at 100%, jump to main
+	ldi RPG_Prev, 0x30		; set detent input state
+	cpi DC, 200				; if DC is at 100%, jump to main
 	breq Main
-	inc DC					; increment DC 2x
 	inc DC
 	sts OCR2B, DC			; update timer0 duty cycle
+	mov Tmp_Data, DC		; copy DC to Tmp_Data
+
 	rjmp Main
 Decr:
-	ldi RPG_Prev, 0x60		; set detent input state
+	ldi RPG_Prev, 0x30		; set detent input state
 	cpi DC, 0				; if DC is at 0%, jump to main
 	breq Main
-	dec DC					; decrement DC 2x
-	dec DC
+	dec DC					; decrement DC counter
 	sts OCR2B, DC			; update timer0 duty cycle
 	rjmp Main
 
