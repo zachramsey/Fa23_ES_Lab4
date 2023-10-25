@@ -11,8 +11,11 @@
 .org 0x0000
 jmp Start					; Skip to start
 
+.org 0x0008					; PCINT1 vector
+jmp PCINT1_ISR				; Jump to PCINT1_ISR
+
 .org 0x000A					; PCINT2 vector
-jmp PCINT2_ISR				; Jump to PCINT2 ISR
+jmp PCINT2_ISR				; Jump to PCINT2_ISR
 
 .org 0x0034					; Start of program memory
 rjmp Start
@@ -23,8 +26,8 @@ msg:						; Create a static string in program memory.
 Start:
 ;==================| Configure I/O |=================
 ; Inputs
-cbi DDRD, 2					; uC PD7 (INT0)		 <- PBS (Pushbutton)
-cbi DDRD, 4					; uC PD6 (PCINT[16]) <- RPG A
+cbi DDRD, 2					; uC PD2 (INT0)		 <- PBS (Pushbutton)
+cbi DDRD, 4					; uC PD4 (PCINT[16]) <- RPG A
 cbi DDRD, 5  				; uC PD5 (PCINT[17]) <- RPG B
 ; Outputs
 sbi DDRB, 3  				; uC PB3 		-> LCD E (Enable)
@@ -48,6 +51,13 @@ rcall Init_LCD			; initialize LCD
 rcall Init_Timer2		; init timer2 for PWM
 rcall Send_String		; display string on LCD
 
+;Initialize Push Button Interupt
+ldi Tmp_Reg, (1<<PCINT18)	; enable PCINT16 and PCINT17
+sts PCMSK1, Tmp_Reg
+ldi Tmp_Reg, (1<<PCIE1)						; enable PCINT1
+sts PCICR, Tmp_Reg
+sei
+
 ; Initialize RPG Interupt
 ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT16 and PCINT17
 sts PCMSK2, Tmp_Reg
@@ -67,6 +77,25 @@ PCINT2_ISR:
 	mov RPG_Prev, RPG_Curr	; otherwise update previous input state
 	reti
 
+PCINT1_ISR:
+	in Tmp_Reg, PIND
+	andi Tmp_Reg, 0x04		; Mask bits 3
+	cpi Tmp_Reg, 0x04		; if set, jmp to compare
+	breq PB_Compare
+	reti
+	PB_Compare:
+		;is fan DC greater than 5%? y -> turn off | n -> turn on
+		cpi DC, 10			
+		brge Trn_Off				; Branch if greater than or equal (DC>10 -> turn off)
+		;conclude fan is off, turn on
+		ldi DC, 200
+		sts OCR2B, DC			; update timer2 duty cycle to max
+		reti
+			Trn_Off:
+				ldi DC, 0
+				sts OCR2B, DC			; update timer2 duty cycle to max
+				reti
+
 ;==================| RPG Handling |==================
 RPG_Detent:
 	cpi RPG_Prev, 0x10 		; if prev state was '01', jump to Incr
@@ -78,7 +107,7 @@ Incr:
 	cpi DC, 200				; if DC is at 100%, jump to main
 	breq Main
 	inc DC
-	sts OCR2B, DC			; update timer0 duty cycle
+	sts OCR2B, DC			; update timer2 duty cycle
 	reti
 Decr:
 	ldi RPG_Prev, 0x30		; set detent input state
