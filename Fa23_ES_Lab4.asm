@@ -11,11 +11,11 @@
 .org 0x0000
 jmp Start					; Skip to start
 
-.org 0x0008					; PCINT1 vector
-jmp PCINT1_ISR				; Jump to PCINT1_ISR
+.org 0x0002					; INT0 vector
+jmp INT0_ISR				; Jump to INT0 ISR
 
 .org 0x000A					; PCINT2 vector
-jmp PCINT2_ISR				; Jump to PCINT2_ISR
+jmp PCINT2_ISR				; Jump to PCINT2 ISR
 
 .org 0x0034					; Start of program memory
 rjmp Start
@@ -26,8 +26,8 @@ msg:						; Create a static string in program memory.
 Start:
 ;==================| Configure I/O |=================
 ; Inputs
-cbi DDRD, 2					; uC PD2 (INT0)		 <- PBS (Pushbutton)
-cbi DDRD, 4					; uC PD4 (PCINT[16]) <- RPG A
+cbi DDRD, 2					; uC PD7 (INT0)		 <- PBS (Pushbutton)
+cbi DDRD, 4					; uC PD6 (PCINT[16]) <- RPG A
 cbi DDRD, 5  				; uC PD5 (PCINT[17]) <- RPG B
 ; Outputs
 sbi DDRB, 3  				; uC PB3 		-> LCD E (Enable)
@@ -46,136 +46,137 @@ sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 .def RPG_Prev = R20			; previous RPG input state
 .def DC = R21				; Duty cycle counter
 
-;===================| Main Loop |====================
-rcall Init_LCD			; initialize LCD
-rcall Init_Timer2		; init timer2 for PWM
-rcall Send_String		; display string on LCD
 
-;Initialize Push Button Interupt
-ldi Tmp_Reg, (1<<PCINT18)	; enable PCINT16 and PCINT17
-sts PCMSK1, Tmp_Reg
-ldi Tmp_Reg, (1<<PCIE1)						; enable PCINT1
-sts PCICR, Tmp_Reg
-sei
+;==================| Initialize LCD |================
+rcall Delay_100m			; wait to power up LCD
 
-; Initialize RPG Interupt
-ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT16 and PCINT17
+ldi Tmp_Data, 0x03			; Set 8-bit mode
+rcall Send_Nibble
+rcall Delay_5m
+
+rcall Send_Nibble			; Set 8-bit mode
+rcall Delay_200u
+
+rcall Send_Nibble			; Set 8-bit mode
+rcall Delay_200u
+
+ldi Tmp_Data, 0x02			; Set 4-bit mode
+rcall Send_Nibble
+rcall Delay_5m
+
+ldi Tmp_Data, 0x28			; Set interface
+rcall Send_Instr
+rcall Delay_100u
+
+ldi Tmp_Data, 0x08			; dont shift display, hide cursor 
+rcall Send_Instr
+rcall Delay_100u
+
+ldi Tmp_Data, 0x01			; Clear and home display
+rcall Send_Instr
+rcall Delay_5m
+
+ldi Tmp_Data, 0x06			; move cursor right
+rcall Send_Instr
+rcall Delay_100u
+
+ldi Tmp_Data, 0x0C			; turn on display
+rcall Send_Instr
+rcall Delay_100u
+
+; display string on LCD for testing
+rcall Send_String
+
+;============| Initialize PWM on timer2 |============
+ldi Tmp_Reg, 0				; clear timer0
+sts TCNT2, Tmp_Reg
+
+ldi Tmp_Reg, 200			; set timer0 TOP val to 200
+sts OCR2A, Tmp_Reg
+
+ldi Tmp_Reg, 0x23			; configure timer0 to Fast PWM (mode 7)
+sts TCCR2A, Tmp_Reg
+ldi Tmp_Reg, 0x09
+sts TCCR2B, Tmp_Reg
+
+ldi Tmp_Reg, 0				; set timer0 duty cycle to 0 (DC = OCR0B / 200)
+sts OCR2B, Tmp_Reg
+
+ldi DC, 0					; initialize duty cycle counter to 0
+
+;=============| Initialize RPG Interupt |============
+ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT20 and PCINT21
 sts PCMSK2, Tmp_Reg
 ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2
 sts PCICR, Tmp_Reg
-sei
 
+;=============| Initialize PBS Interupt |============
+ldi Tmp_Reg, EICRA
+sbr Tmp_Reg, (1<<ISC01) | (1<<ISC00)		; enable rising edge detection on INT0
+sts EICRA, Tmp_Reg
+sbi EIMSK, INT0								; enable INT0
+
+;===================| Main Loop |====================
+sei							; Enable interupts globally
 Main:
 	nop
 	rjmp Main				; loop Main
 
+;==============| PBS Interupt Handling |=============
+INT0_ISR:
+	push Tmp_Reg			; save temp register
+	in Tmp_Reg, SREG		; save status register
+	push Tmp_Reg
+	lds Tmp_Reg, OCR2B		; load timer2 duty cycle into Tmp_Reg
+	cp Tmp_Reg, DC			; if timer2 duty cycle is DC, turn fan off
+	breq Fan_Off
+	sts OCR2B, DC			; otherwise, turn fan on
+	rjmp INT0_Cleanup
+Fan_Off:
+	ldi Tmp_Reg, 0			; set timer2 duty cycle to 0
+	sts OCR2B, Tmp_Reg
+INT0_Cleanup:
+	pop Tmp_Reg				; restore status register
+	out SREG, Tmp_Reg
+	pop Tmp_Reg				; restore temp register
+	reti
+
+;==============| RPG Interupt Handling |=============
 PCINT2_ISR:
+	push Tmp_Reg			; save temp register
+	in Tmp_Reg, SREG		; save status register
+	push Tmp_Reg
 	in RPG_Curr, PIND
 	andi RPG_Curr, 0x30		; Mask bits 5 and 4
-	cpi RPG_Curr, 0x30		; if both are set, jump to RPG_Detent
-	breq RPG_Detent
-	mov RPG_Prev, RPG_Curr	; otherwise update previous input state
-	reti
-
-PCINT1_ISR:
-	in Tmp_Reg, PIND
-	andi Tmp_Reg, 0x04		; Mask bits 3
-	cpi Tmp_Reg, 0x04		; if set, jmp to compare
-	breq PB_Compare
-	reti
-	PB_Compare:
-		;is fan DC greater than 5%? y -> turn off | n -> turn on
-		cpi DC, 10			
-		brge Trn_Off				; Branch if greater than or equal (DC>10 -> turn off)
-		;conclude fan is off, turn on
-		ldi DC, 200
-		sts OCR2B, DC			; update timer2 duty cycle to max
-		reti
-			Trn_Off:
-				ldi DC, 0
-				sts OCR2B, DC			; update timer2 duty cycle to max
-				reti
-
-;==================| RPG Handling |==================
-RPG_Detent:
-	cpi RPG_Prev, 0x10 		; if prev state was '01', jump to Incr
+	cpi RPG_Curr, 0x30		; if one is not set, return
+	brne PCINT2_Cleanup
+	cpi RPG_Prev, 0x10 		; if prev state was '01', branch to Incr
 	breq Incr
-	cpi RPG_Prev, 0x20 		; if prev state was '10', jump to Decr
+	cpi RPG_Prev, 0x20 		; if prev state was '10', branch to Decr
 	breq Decr
+	; rjmp PCINT2_Cleanup		; otherwise, something went wrong; just leave
 Incr:
-	ldi RPG_Prev, 0x30		; set detent input state
-	cpi DC, 200				; if DC is at 100%, jump to main
-	breq Main
+	cpi DC, 200				; if DC is at 100%, return
+	breq PCINT2_Cleanup
 	inc DC
-	sts OCR2B, DC			; update timer2 duty cycle
-	reti
+	sts OCR2B, DC			; update timer0 duty cycle
+	rjmp PCINT2_Cleanup
 Decr:
-	ldi RPG_Prev, 0x30		; set detent input state
-	cpi DC, 0				; if DC is at 0%, jump to main
-	breq Main
+	cpi DC, 0				; if DC is at 0%, return
+	breq PCINT2_Cleanup
 	dec DC					; decrement DC counter
 	sts OCR2B, DC			; update timer0 duty cycle
+PCINT2_Cleanup:
+	mov RPG_Prev, RPG_Curr	; update previous input state
+	pop Tmp_Reg				; restore status register
+	out SREG, Tmp_Reg
+	pop Tmp_Reg				; restore temp register
 	reti
-
-;=================| Initialization |=================
-Init_Timer2:
-	ldi Tmp_Reg, 0
-	sts TCNT2, Tmp_Reg		; clear timer0
-	ldi Tmp_Reg, 200		; set timer0 TOP val to 200
-	sts OCR2A, Tmp_Reg
-	ldi Tmp_Reg, 0x23		; configure timer0 to Fast PWM (mode 7)
-	sts TCCR2A, Tmp_Reg
-	ldi Tmp_Reg, 0x09
-	sts TCCR2B, Tmp_Reg
-	ldi DC, 0				; initialize duty cycle counter to 0
-	ldi Tmp_Reg, 0			; set timer0 duty cycle to 0 (DC = OCR0B / 200)
-	sts OCR2B, Tmp_Reg
-	ret
-
-Init_LCD:
-	rcall Delay_100m		; wait to power up LCD
-	
-	ldi Tmp_Data, 0x03		; Set 8-bit mode
-	rcall Send_Nibble
-	rcall Delay_5m
-
-	rcall Send_Nibble		; Set 8-bit mode
-	rcall Delay_200u
-
-	rcall Send_Nibble		; Set 8-bit mode
-	rcall Delay_200u
-
-	ldi Tmp_Data, 0x02		; Set 4-bit mode
-	rcall Send_Nibble
-	rcall Delay_5m
-	
-	ldi Tmp_Data, 0x28		; Set interface
-	rcall Send_Instr
-	rcall Delay_100u
-
-	ldi Tmp_Data, 0x08		; dont shift display, hide cursor 
-	rcall Send_Instr
-	rcall Delay_100u
-
-	ldi Tmp_Data, 0x01		; Clear and home display
-	rcall Send_Instr
-	rcall Delay_5m
-
-	ldi Tmp_Data, 0x06		; move cursor right
-	rcall Send_Instr
-	rcall Delay_100u
-
-	ldi Tmp_Data, 0x0C		; turn on display
-	rcall Send_Instr
-	rcall Delay_100u
-	
-	ret
 
 ;===============| LCD Communication |================
 Send_String:
 	ldi Tmp_Data, 0x80		; set DDRAM address to 0x00
 	rcall Send_Instr
-	
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
 	ldi r24, 10 			; r24 <-- length of the string
@@ -192,7 +193,6 @@ Send_String:
 		dec r24				; Repeat until all characters are out
 		brne Next_Char
 		ret
-
 Send_Instr:
 	cbi PORTB, 5			; clear R/S | select instruction register
 	cbi PORTB, 3			; clear Enable
@@ -201,7 +201,6 @@ Send_Instr:
 	swap Tmp_Data			; swap nibbles back
 	rcall Send_Nibble		; send lower nibble
 	ret
-
 Send_Nibble:
 	out PORTC, Tmp_Data		; send upper nibble
 	nop
@@ -222,25 +221,21 @@ Delay_100u:					; 112us delay
 	ldi Tmp_Reg, 0x01		; set prescaler to none
 	out TCCR0B, Tmp_Reg		; output prescaler configurationv
 	rjmp Delay_loop			; begin delay
-
 Delay_200u:					; 208us delay
 	ldi Tmr_Cnt, 13			; set timer overflow counter to 13
 	ldi Tmp_Reg, 0x01		; set prescaler to none
 	out TCCR0B, Tmp_Reg		; output prescaler configuration
 	rjmp Delay_loop			; begin delay
-
 Delay_5m:					; 5.12ms delay
 	ldi Tmr_Cnt, 40			; set timer overflow counter to 40
 	ldi Tmp_Reg, 0x02		; set prescaler to 8
 	out TCCR0B, Tmp_Reg		; output prescaler configuration
 	rjmp Delay_loop			; begin delay
-
 Delay_100m:					; 100.35ms delay
 	ldi Tmr_Cnt, 98			; set timer overflow counter to 98
 	ldi Tmp_Reg, 0x03		; set prescaler to 64
 	out TCCR0B, Tmp_Reg		; output prescaler configuration
 	rjmp Delay_loop			; begin delay
-
 Delay_loop:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
