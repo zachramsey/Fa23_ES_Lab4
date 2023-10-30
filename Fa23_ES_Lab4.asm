@@ -120,7 +120,7 @@ sts PCICR, Tmp_Reg
 
 ;=============| Initialize PBS Interupt |============
 ldi Tmp_Reg, EICRA
-sbr Tmp_Reg, (1<<ISC01) | (1<<ISC00)		; enable rising edge detection on INT0
+sbr Tmp_Reg, (1<<ISC01)						; enable rising edge detection on INT0
 sts EICRA, Tmp_Reg
 sbi EIMSK, INT0								; enable INT0
 
@@ -135,7 +135,7 @@ ldi Tmp_Data, 0x46		; 'F' for 'OFF'
 rcall Push_Char			; push 'F' to LCD twice
 rcall Push_Char
 Main:
-	nop	//take a short break before looping back
+	nop						; take a short break before looping back
 	nop
 	rjmp Main				; loop Main
 
@@ -145,11 +145,22 @@ INT0_ISR:
 	cpi Tmp_Reg, 5			; if timer2 duty cycle is DC, turn fan off
 	brge Fan_Off
 	sts OCR2B, DC			; otherwise, turn fan on
+	; Display ON
+	rcall Send_Ln2
+	ldi Tmp_Data, 0x4E		; Push 'N' for 'ON'
+	rcall Push_Char
+	ldi Tmp_Data, 0x20		; Push space to remove last 'F' from 'OFF'
+	rcall Push_Char
 	rcall Delay_100u
 	reti
 Fan_Off:
 	ldi Tmp_Reg, 0			; set timer2 duty cycle to 0
 	sts OCR2B, Tmp_Reg
+	; display off
+	rcall Send_Ln2
+	ldi Tmp_Data, 0x46		; 'F' for 'OFF'
+	rcall Push_Char			; push 'F' to LCD twice
+	rcall Push_Char
 	rcall Delay_100u
 	reti
 
