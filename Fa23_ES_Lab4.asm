@@ -141,12 +141,11 @@ Main:
 
 ;==============| PBS Interupt Handling |=============
 INT0_ISR:
-	lds Tmp_Reg, OCR2B		; load timer2 duty cycle into Tmp_Reg
-	cpi Tmp_Reg, 5			; if timer2 duty cycle is DC, turn fan off
-	brge Fan_Off
+	lds Tmp_Reg, PCICR		; load timer2 duty cycle into Tmp_Reg
+	cpi Tmp_Reg, (1<<PCIE2)		; if timer2 duty cycle is DC, turn fan off
+	breq Fan_Off
 	sts OCR2B, DC			; otherwise, turn fan on
 	; Display ON
-	clr Tmp_Reg									;Clear Temp_Reg
 	ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2 (rpg interupts
 	sts PCICR, Tmp_Reg							;Update Config
 	rcall Send_Ln2			;display static display stuff
