@@ -19,8 +19,11 @@ jmp PCINT2_ISR				; Jump to PCINT2 ISR
 
 .org 0x0034					; Start of program memory
 rjmp Start
-msg:						; Create a static string in program memory.
+ln1_static:						; Create a static string in program memory.
 	.DB "DC = %"		; "DC = {XY.Z}%" X Y Z @ bytes 6 7 9
+	.DW 0
+ln2_static:
+	.DB "Fan: O"
 	.DW 0
 Start:
 ;==================| Configure I/O |=================
@@ -126,7 +129,11 @@ sei							; Enable interupts globally
 ldi DC, 0					; initialize duty cycle counter to 0
 ldi XH, 0					; initialize duty cycle display counter to 0
 ldi XL, 5
-rcall Send_String			; Send initial string to LCD
+rcall Send_Ln1			; Send initial string to LCD
+rcall Send_Ln2
+ldi Tmp_Data, 0x46		; 'F' for 'OFF'
+rcall Push_Char			; push 'F' to LCD twice
+rcall Push_Char
 Main:
 	rjmp Main				; loop Main
 
@@ -160,12 +167,19 @@ RPG_Detent:
 	reti
 Incr:
 	ldi RPG_Prev, 0x30		; update RPG state to '11'
-	cpi DC, 199				; if DC is at 100%, return
+	cpi DC, 198				; if DC is at 100%, return
 	breq PCINT2_Exit
 	inc DC
 	sts OCR2B, DC			; update timer0 duty cycle
 	adiw X, 5				; increment duty cycle display counter
-	rcall Send_String		; update line 1 of LCD
+	rcall Send_Ln1			; update line 1 of LCD
+	cpi DC, 32
+	brne PCINT2_Exit
+	rcall Send_Ln2			; update line 2 of LCD
+	ldi Tmp_Data, 0x4E		; Push 'N' for 'ON'
+	rcall Push_Char
+	ldi Tmp_Data, 0x20		; Push space to remove last 'F' from 'OFF'
+	rcall Push_Char
 	reti
 Decr:
 	ldi RPG_Prev, 0x30		; update RPG state to '11'
@@ -174,21 +188,26 @@ Decr:
 	dec DC					; decrement DC counter
 	sts OCR2B, DC			; update timer0 duty cycle
 	sbiw X, 5				; decrement duty cycle display counter
-	rcall Send_String		; update line 1 of LCD
-	reti
+	rcall Send_Ln1			; update line 1 of LCD
+	cpi DC, 16
+	brne PCINT2_Exit
+	rcall Send_Ln2			; update line 2 of LCD
+	ldi Tmp_Data, 0x46		; 'F' for 'OFF'
+	rcall Push_Char			; push 'F' to LCD twice
+	rcall Push_Char
 PCINT2_Exit:
 	reti
 
 ;===============| LCD Communication |================
-Send_String:
+Send_Ln1:
 	ldi Tmp_Data, 0x80		; set DDRAM address to 0x00
 	rcall Send_Instr
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
 	ldi r25, 9 				; r25 <-- length of the string
-	ldi r30, LOW(2*msg) 	; Load Z register low
-	ldi r31, HIGH(2*msg)	; Load Z register high
-Send_String_Loop:
+	ldi r30, LOW(2*ln1_static) 	; Load Z register low
+	ldi r31, HIGH(2*ln1_static)	; Load Z register high
+Send_Ln1_Loop:
 	cpi r25, 4				; if r25 = 4, go to First_Variable
 	breq First_Variable
 	tst r25					; else if r25 != 0, go to Next_Static
@@ -198,7 +217,7 @@ Next_Static:
 	lpm	Tmp_Data, Z+		; load byte from prog mem at Z in Tmp_Reg, post-increment Z
 	rcall Push_Char			; push character to LCD
 	dec r25
-	rjmp Send_String_Loop
+	rjmp Send_Ln1_Loop
 First_Variable:
 	mov dres16uH, XH		; result <- DC display counter
 	mov dres16uL, XL
@@ -225,7 +244,23 @@ Write_Variable:
 	rcall Push_Char
 	pop Tmp_Data			; next digit
 	rcall Push_Char
-	rjmp Send_String_Loop
+	rjmp Send_Ln1_Loop
+
+Send_Ln2:
+	ldi Tmp_Data, 0xC0		; set DDRAM address to 0xC0
+	rcall Send_Instr
+	sbi PORTB, 5			; set R/S | Data mode
+	nop
+	ldi r25, 6 				; r25 <-- length of the string
+	ldi r30, LOW(2*ln2_static) 	; Load Z register low
+	ldi r31, HIGH(2*ln2_static)	; Load Z register high
+Send_Ln2_Loop:
+	lpm	Tmp_Data, Z+		; load byte from prog mem at Z in Tmp_Reg, post-increment Z
+	rcall Push_Char			; push character to LCD
+	dec r25
+	brne Send_Ln2_Loop
+	ret
+	
 Push_Char:
 	sbi PORTB, 5			; set R/S | select data register
 	cbi PORTB, 3			; clear Enable
