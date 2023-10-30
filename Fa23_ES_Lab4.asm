@@ -109,10 +109,6 @@ sts TCCR2B, Tmp_Reg
 ldi Tmp_Reg, 0				; set timer0 duty cycle to 0 (DC = OCR0B / 200)
 sts OCR2B, Tmp_Reg
 
-ldi DC, 0					; initialize duty cycle counter to 0
-ldi XH, 0					; initialize duty cycle display counter to 0
-ldi XL, 5
-
 ;=============| Initialize RPG Interupt |============
 ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT20 and PCINT21
 sts PCMSK2, Tmp_Reg
@@ -127,12 +123,11 @@ sbi EIMSK, INT0								; enable INT0
 
 ;===================| Main Loop |====================
 sei							; Enable interupts globally
-
-; ldi XH, 0x03			; an "updated" DC for testing
-; ldi XL, 0xE7
-; rcall Send_String		; update line 1 of LCD
+ldi DC, 0					; initialize duty cycle counter to 0
+ldi XH, 0					; initialize duty cycle display counter to 0
+ldi XL, 5
+rcall Send_String			; Send initial string to LCD
 Main:
-	rcall Send_String		; update line 1 of LCD
 	rjmp Main				; loop Main
 
 ;==============| PBS Interupt Handling |=============
@@ -165,19 +160,21 @@ RPG_Detent:
 	reti
 Incr:
 	ldi RPG_Prev, 0x30		; update RPG state to '11'
-	cpi DC, 200				; if DC is at 100%, return
+	cpi DC, 199				; if DC is at 100%, return
 	breq PCINT2_Exit
 	inc DC
-	adiw X, 5				; increment duty cycle display counter
 	sts OCR2B, DC			; update timer0 duty cycle
+	adiw X, 5				; increment duty cycle display counter
+	rcall Send_String		; update line 1 of LCD
 	reti
 Decr:
 	ldi RPG_Prev, 0x30		; update RPG state to '11'
 	cpi DC, 0				; if DC is at 0%, return
 	breq PCINT2_Exit
 	dec DC					; decrement DC counter
-	sbiw X, 5				; decrement duty cycle display counter
 	sts OCR2B, DC			; update timer0 duty cycle
+	sbiw X, 5				; decrement duty cycle display counter
+	rcall Send_String		; update line 1 of LCD
 	reti
 PCINT2_Exit:
 	reti
@@ -188,55 +185,55 @@ Send_String:
 	rcall Send_Instr
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
-	ldi r25, 9 			; r25 <-- length of the string
+	ldi r25, 9 				; r25 <-- length of the string
 	ldi r30, LOW(2*msg) 	; Load Z register low
 	ldi r31, HIGH(2*msg)	; Load Z register high
-
-	Send_String_Loop:
-		cpi r25, 4
-		breq First_Variable
-		tst r25
-		brne Next_Static
-		ret
-		Next_Static:
-			lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
-			rcall Push_Char		; push character to LCD
-			dec r25			; Repeat until all characters are out
-			rjmp Send_String_Loop
-		First_Variable:
-			mov dres16uH, XH		; result <- DC display counter
-			mov dres16uL, XL
-		Next_Variable:
-			mov dd16uH, dres16uH	; dividend <- result
-			mov dd16uL, dres16uL
-			ldi dv16uH, 0x00		; divisor <- 10
-			ldi dv16uL, 0x0A
-			rcall div16u			; divide DC display counter by 10
-			ldi Tmp_Reg, 0x30		; ASCII digit conversion offset
-			mov Tmp_Data, drem16uL	; remainder <- DC display counter
-			add Tmp_Data, Tmp_Reg	; convert remainder to ASCII value
-			push Tmp_Data			; push remainder to stack
-			dec r25					; Repeat until all characters are out
-			cpi r25, 1
-			breq Write_Variable
-			rjmp Next_Variable
-		Write_Variable:
-			pop Tmp_Data			; pop remainder from stack
-			rcall Push_Char			; push character to LCD
-			pop Tmp_Data			; pop remainder from stack
-			rcall Push_Char			; push character to LCD
-			pop Tmp_Data			; pop remainder from stack
-			rcall Push_Char			; push character to LCD
-			rjmp Send_String_Loop
-		Push_Char:
-			sbi PORTB, 5		; set R/S | select data register
-			cbi PORTB, 3		; clear Enable
-			swap Tmp_Data		; swap nibbles
-			rcall Send_Nibble	; send upper nibble
-			swap Tmp_Data		; swap nibbles back
-			rcall Send_Nibble	; send lower nibble
-			ret
-
+Send_String_Loop:
+	cpi r25, 4				; if r25 = 4, go to First_Variable
+	breq First_Variable
+	tst r25					; else if r25 != 0, go to Next_Static
+	brne Next_Static
+	ret						; else return
+Next_Static:
+	lpm	Tmp_Data, Z+		; load byte from prog mem at Z in Tmp_Reg, post-increment Z
+	rcall Push_Char			; push character to LCD
+	dec r25
+	rjmp Send_String_Loop
+First_Variable:
+	mov dres16uH, XH		; result <- DC display counter
+	mov dres16uL, XL
+Next_Variable:
+	mov dd16uH, dres16uH	; dividend <- result
+	mov dd16uL, dres16uL
+	ldi dv16uH, 0x00		; divisor <- 10
+	ldi dv16uL, 0x0A
+	rcall div16u			; divide DC display counter by 10
+	ldi Tmp_Reg, 0x30		; ASCII digit conversion offset
+	mov Tmp_Data, drem16uL	; remainder <- DC display counter
+	add Tmp_Data, Tmp_Reg	; convert remainder to ASCII value
+	push Tmp_Data			; push remainder to stack
+	dec r25
+	cpi r25, 1				; Repeat until all digits calculated
+	breq Write_Variable
+	rjmp Next_Variable
+Write_Variable:
+	pop Tmp_Data			; pop digit from stack
+	rcall Push_Char			; push to LCD
+	pop Tmp_Data			; next digit
+	rcall Push_Char
+	ldi Tmp_Data, 0x2E		; push decimal point to LCD
+	rcall Push_Char
+	pop Tmp_Data			; next digit
+	rcall Push_Char
+	rjmp Send_String_Loop
+Push_Char:
+	sbi PORTB, 5			; set R/S | select data register
+	cbi PORTB, 3			; clear Enable
+	swap Tmp_Data			; swap nibbles
+	rcall Send_Nibble		; send upper nibble
+	swap Tmp_Data			; swap nibbles back
+	rcall Send_Nibble		; send lower nibble
+	ret
 Send_Instr:
 	cbi PORTB, 5			; clear R/S | select instruction register
 	cbi PORTB, 3			; clear Enable
