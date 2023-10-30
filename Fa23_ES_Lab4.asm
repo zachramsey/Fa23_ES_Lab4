@@ -41,8 +41,8 @@ sbi DDRC, 3					; uC PC3 		-> LCD DB7
 sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 
 ;==============| Configure Registers |===============
-.def Tmp_Reg = R16			; Temporary register
-.def Tmp_Data = R17			; Temporary data register
+.def Tmp_Reg = R16			; Temporary register 
+.def Tmp_Data = R17			; Temporary data register 
 .def Cnt_Reg = R18			; Timer counter
 .def RPG_Curr = R25			; Current RPG input state	:: was R19  //setting to R25 and R26 fixed pushbutton but breaks display
 .def RPG_Prev = R28			; previous RPG input state	:: was R20
@@ -141,11 +141,15 @@ Main:
 
 ;==============| PBS Interupt Handling |=============
 INT0_ISR:
-	lds Tmp_Reg, PCICR		; load timer2 duty cycle into Tmp_Reg
-	cpi Tmp_Reg, (1<<PCIE2)		; if timer2 duty cycle is DC, turn fan off
-	breq Fan_Off
-	sts OCR2B, DC			; otherwise, turn fan on
+	;lds Tmp_Reg, PCICR			;Check the rpg interupt status
+	;cpi Tmp_Reg, (1<<PCIE2)		;Note: PCIE2 stored whether rpg interupts are on or not
+	;breq Fan_Off				;turn fan off
+	lds Tmp_Reg, OCR2B			; load timer2 duty cycle into Tmp_Reg
+	cpi Tmp_Reg, 0				; if timer2 duty cycle is DC, turn fan off
+	brne Fan_Off				;brge
+	sts OCR2B, DC				; otherwise, turn fan on
 	; Display ON
+	clr Tmp_Reg									;Clear Temp_Reg
 	ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2 (rpg interupts
 	sts PCICR, Tmp_Reg							;Update Config
 	rcall Send_Ln2			;display static display stuff
