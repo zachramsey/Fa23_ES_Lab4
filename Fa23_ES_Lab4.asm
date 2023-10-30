@@ -20,9 +20,8 @@ jmp PCINT2_ISR				; Jump to PCINT2 ISR
 .org 0x0034					; Start of program memory
 rjmp Start
 msg:						; Create a static string in program memory.
-	.DB "Hi John!  "
+	.DB "DC = %"		; "DC = {XY.Z}%" X Y Z @ bytes 6 7 9
 	.DW 0
-
 Start:
 ;==================| Configure I/O |=================
 ; Inputs
@@ -41,10 +40,21 @@ sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 ;==============| Configure Registers |===============
 .def Tmp_Reg = R16			; Temporary register
 .def Tmp_Data = R17			; Temporary data register
-.def Tmr_Cnt = R18			; Timer counter
+.def Cnt_Reg = R18			; Timer counter
 .def RPG_Curr = R19			; Current RPG input state
 .def RPG_Prev = R20			; previous RPG input state
 .def DC = R21				; Duty cycle counter
+
+; 16-bit r25division registers
+.def drem16uL =r14
+.def drem16uH =r15
+.def dres16uL =r22
+.def dres16uH =r23
+.def dd16uL	  =r22
+.def dd16uH	  =r23
+.def dv16uL	  =r24
+.def dv16uH	  =r19
+.def dcnt16u  =r20
 
 
 ;==================| Initialize LCD |================
@@ -84,9 +94,6 @@ ldi Tmp_Data, 0x0C			; turn on display
 rcall Send_Instr
 rcall Delay_100u
 
-; display string on LCD for testing
-rcall Send_String
-
 ;============| Initialize PWM on timer2 |============
 ldi Tmp_Reg, 0				; clear timer0
 sts TCNT2, Tmp_Reg
@@ -103,6 +110,8 @@ ldi Tmp_Reg, 0				; set timer0 duty cycle to 0 (DC = OCR0B / 200)
 sts OCR2B, Tmp_Reg
 
 ldi DC, 0					; initialize duty cycle counter to 0
+ldi XH, 0					; initialize duty cycle display counter to 0
+ldi XL, 5
 
 ;=============| Initialize RPG Interupt |============
 ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT20 and PCINT21
@@ -118,8 +127,12 @@ sbi EIMSK, INT0								; enable INT0
 
 ;===================| Main Loop |====================
 sei							; Enable interupts globally
+
+; ldi XH, 0x03			; an "updated" DC for testing
+; ldi XL, 0xE7
+; rcall Send_String		; update line 1 of LCD
 Main:
-	nop
+	rcall Send_String		; update line 1 of LCD
 	rjmp Main				; loop Main
 
 ;==============| PBS Interupt Handling |=============
@@ -155,6 +168,7 @@ Incr:
 	cpi DC, 200				; if DC is at 100%, return
 	breq PCINT2_Exit
 	inc DC
+	adiw X, 5				; increment duty cycle display counter
 	sts OCR2B, DC			; update timer0 duty cycle
 	reti
 Decr:
@@ -162,6 +176,7 @@ Decr:
 	cpi DC, 0				; if DC is at 0%, return
 	breq PCINT2_Exit
 	dec DC					; decrement DC counter
+	sbiw X, 5				; decrement duty cycle display counter
 	sts OCR2B, DC			; update timer0 duty cycle
 	reti
 PCINT2_Exit:
@@ -173,20 +188,55 @@ Send_String:
 	rcall Send_Instr
 	sbi PORTB, 5			; set R/S | Data mode
 	nop
-	ldi r24, 10 			; r24 <-- length of the string
+	ldi r25, 9 			; r25 <-- length of the string
 	ldi r30, LOW(2*msg) 	; Load Z register low
 	ldi r31, HIGH(2*msg)	; Load Z register high
-	Next_Char:
-		lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
-		sbi PORTB, 5		; set R/S | select data register
-		cbi PORTB, 3		; clear Enable
-		swap Tmp_Data		; swap nibbles
-		rcall Send_Nibble	; send upper nibble
-		swap Tmp_Data		; swap nibbles back
-		rcall Send_Nibble	; send lower nibble
-		dec r24				; Repeat until all characters are out
-		brne Next_Char
+
+	Send_String_Loop:
+		cpi r25, 4
+		breq First_Variable
+		tst r25
+		brne Next_Static
 		ret
+		Next_Static:
+			lpm	Tmp_Data, Z+	; load byte from prog mem at Z in Tmp_Reg, post-increment Z
+			rcall Push_Char		; push character to LCD
+			dec r25			; Repeat until all characters are out
+			rjmp Send_String_Loop
+		First_Variable:
+			mov dres16uH, XH		; result <- DC display counter
+			mov dres16uL, XL
+		Next_Variable:
+			mov dd16uH, dres16uH	; dividend <- result
+			mov dd16uL, dres16uL
+			ldi dv16uH, 0x00		; divisor <- 10
+			ldi dv16uL, 0x0A
+			rcall div16u			; divide DC display counter by 10
+			ldi Tmp_Reg, 0x30		; ASCII digit conversion offset
+			mov Tmp_Data, drem16uL	; remainder <- DC display counter
+			add Tmp_Data, Tmp_Reg	; convert remainder to ASCII value
+			push Tmp_Data			; push remainder to stack
+			dec r25					; Repeat until all characters are out
+			cpi r25, 1
+			breq Write_Variable
+			rjmp Next_Variable
+		Write_Variable:
+			pop Tmp_Data			; pop remainder from stack
+			rcall Push_Char			; push character to LCD
+			pop Tmp_Data			; pop remainder from stack
+			rcall Push_Char			; push character to LCD
+			pop Tmp_Data			; pop remainder from stack
+			rcall Push_Char			; push character to LCD
+			rjmp Send_String_Loop
+		Push_Char:
+			sbi PORTB, 5		; set R/S | select data register
+			cbi PORTB, 3		; clear Enable
+			swap Tmp_Data		; swap nibbles
+			rcall Send_Nibble	; send upper nibble
+			swap Tmp_Data		; swap nibbles back
+			rcall Send_Nibble	; send lower nibble
+			ret
+
 Send_Instr:
 	cbi PORTB, 5			; clear R/S | select instruction register
 	cbi PORTB, 3			; clear Enable
@@ -209,24 +259,23 @@ Send_Nibble:
 	ret
 
 ;==================| Time Delays |===================
-
 Delay_100u:					; 112us delay
-	ldi Tmr_Cnt,7			; set  timer overflow counter to 7
+	ldi Cnt_Reg,7			; set  timer overflow counter to 7
 	ldi Tmp_Reg, 0x01		; set prescaler to none
 	out TCCR0B, Tmp_Reg		; output prescaler configurationv
 	rjmp Delay_loop			; begin delay
 Delay_200u:					; 208us delay
-	ldi Tmr_Cnt, 13			; set timer overflow counter to 13
+	ldi Cnt_Reg, 13			; set timer overflow counter to 13
 	ldi Tmp_Reg, 0x01		; set prescaler to none
 	out TCCR0B, Tmp_Reg		; output prescaler configuration
 	rjmp Delay_loop			; begin delay
 Delay_5m:					; 5.12ms delay
-	ldi Tmr_Cnt, 40			; set timer overflow counter to 40
+	ldi Cnt_Reg, 40			; set timer overflow counter to 40
 	ldi Tmp_Reg, 0x02		; set prescaler to 8
 	out TCCR0B, Tmp_Reg		; output prescaler configuration
 	rjmp Delay_loop			; begin delay
 Delay_100m:					; 100.35ms delay
-	ldi Tmr_Cnt, 98			; set timer overflow counter to 98
+	ldi Cnt_Reg, 98			; set timer overflow counter to 98
 	ldi Tmp_Reg, 0x03		; set prescaler to 64
 	out TCCR0B, Tmp_Reg		; output prescaler configuration
 	rjmp Delay_loop			; begin delay
@@ -238,6 +287,38 @@ Delay_loop:
 	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
 	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
 
-	dec Tmr_Cnt				; Decrement Timer counter
+	dec Cnt_Reg				; Decrement Timer counter
 	brne Delay_loop			; if Timer counter is zero, loop
 	ret						; otherwise, return
+
+;==================| 16-bit Division |===================
+;| Load Dividend:	dd16uH:dd16uL
+;| Load Divisor:	dv16uH:dv16uL
+;| Call div16u
+;| [dd16uH:dd16uL / dv16uH:dv16uL]
+;| Result: 			dres16uH:dres16uL
+;| Remainder:		drem16uH:drem16uL
+
+div16u:
+	clr	drem16uL			; clear remainder Low byte
+	sub	drem16uH,drem16uH	; clear remainder High byte and carry
+	ldi	dcnt16u,17			; init loop counter
+d16u_1:
+	rol	dd16uL				; shift left dividend
+	rol	dd16uH
+	dec	dcnt16u				; decrement counter
+	brne d16u_2				; if done
+	ret						; return
+d16u_2:
+	rol	drem16uL			; shift dividend into remainder
+	rol	drem16uH
+	sub	drem16uL,dv16uL		; remainder = remainder - divisor
+	sbc	drem16uH,dv16uH
+	brcc d16u_3				; if result negative
+	add	drem16uL,dv16uL		; restore remainder
+	adc	drem16uH,dv16uH
+	clc						; clear carry to be shifted into result
+	rjmp d16u_1				; else
+d16u_3:
+	sec						; set carry to be shifted into result
+	rjmp d16u_1
