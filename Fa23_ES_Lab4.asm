@@ -101,7 +101,7 @@ rcall Delay_100u
 ldi Tmp_Reg, 0				; clear timer0
 sts TCNT2, Tmp_Reg
 
-ldi Tmp_Reg, 200			; set timer0 TOP val to 200
+ldi Tmp_Reg, 199			; set timer0 TOP val to 200
 sts OCR2A, Tmp_Reg
 
 ldi Tmp_Reg, 0x23			; configure timer0 to Fast PWM (mode 7)
@@ -120,7 +120,7 @@ sts PCICR, Tmp_Reg
 
 ;=============| Initialize PBS Interupt |============
 ldi Tmp_Reg, EICRA
-sbr Tmp_Reg, (1<<ISC01)						; enable rising edge detection on INT0
+sbr Tmp_Reg, (1<<ISC01)						; enable falling edge detection on INT0
 sts EICRA, Tmp_Reg
 sbi EIMSK, INT0								; enable INT0
 
@@ -146,7 +146,10 @@ INT0_ISR:
 	brge Fan_Off
 	sts OCR2B, DC			; otherwise, turn fan on
 	; Display ON
-	rcall Send_Ln2
+	clr Tmp_Reg									;Clear Temp_Reg
+	ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2 (rpg interupts
+	sts PCICR, Tmp_Reg							;Update Config
+	rcall Send_Ln2			;display static display stuff
 	ldi Tmp_Data, 0x4E		; Push 'N' for 'ON'
 	rcall Push_Char
 	ldi Tmp_Data, 0x20		; Push space to remove last 'F' from 'OFF'
@@ -157,9 +160,12 @@ Fan_Off:
 	ldi Tmp_Reg, 0			; set timer2 duty cycle to 0
 	sts OCR2B, Tmp_Reg
 	; display off
-	rcall Send_Ln2
-	ldi Tmp_Data, 0x46		; 'F' for 'OFF'
-	rcall Push_Char			; push 'F' to LCD twice
+	clr Tmp_Reg									;Clear Temp_Reg
+	ldi Tmp_Reg, (0<<PCIE2)						; disable PCINT2 (rpg interupts
+	sts PCICR, Tmp_Reg							;Update Config
+	rcall Send_Ln2								;display static display stuff
+	ldi Tmp_Data, 0x46							; 'F' for 'OFF'
+	rcall Push_Char								; push 'F' to LCD twice
 	rcall Push_Char
 	rcall Delay_100u
 	reti
