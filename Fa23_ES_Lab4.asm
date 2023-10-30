@@ -44,8 +44,8 @@ sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 .def Tmp_Reg = R16			; Temporary register
 .def Tmp_Data = R17			; Temporary data register
 .def Cnt_Reg = R18			; Timer counter
-.def RPG_Curr = R19			; Current RPG input state
-.def RPG_Prev = R20			; previous RPG input state
+.def RPG_Curr = R25			; Current RPG input state	:: was R19  //setting to R25 and R26 fixed pushbutton but breaks display
+.def RPG_Prev = R28			; previous RPG input state	:: was R20
 .def DC = R21				; Duty cycle counter
 
 ; 16-bit r25division registers
@@ -56,8 +56,8 @@ sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 .def dd16uL	  =r22
 .def dd16uH	  =r23
 .def dv16uL	  =r24
-.def dv16uH	  =r19
-.def dcnt16u  =r20
+.def dv16uH	  =r19 //Previously used 
+.def dcnt16u  =r20 //previously used 
 
 
 ;==================| Initialize LCD |================
@@ -135,6 +135,8 @@ ldi Tmp_Data, 0x46		; 'F' for 'OFF'
 rcall Push_Char			; push 'F' to LCD twice
 rcall Push_Char
 Main:
+	nop	//take a short break before looping back
+	nop
 	rjmp Main				; loop Main
 
 ;==============| PBS Interupt Handling |=============
