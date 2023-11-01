@@ -7,6 +7,7 @@
 
 .include "m328Pdef.inc"		; microcontroller-specific definitions
 .cseg
+.cseg
 .org 0x0000
 jmp Start					; Skip to start
 
@@ -17,15 +18,13 @@ jmp INT0_ISR				; Jump to INT0 ISR
 jmp PCINT2_ISR				; Jump to PCINT2 ISR
 
 .org 0x0034					; Start of program memory
-
-ln1_static:					; Create static strings in program memory
-	.DB "DC = %"
+rjmp Start
+ln1_static:						; Create a static string in program memory.
+	.DB "DC = %"		; "DC = {XY.Z}%" X Y Z @ bytes 6 7 9
 	.DW 0
-
 ln2_static:
 	.DB "Fan: O"
 	.DW 0
-
 Start:
 ;==================| Configure I/O |=================
 ; Inputs
@@ -42,11 +41,11 @@ sbi DDRC, 3					; uC PC3 		-> LCD DB7
 sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 
 ;==============| Configure Registers |===============
-.def Tmp_Reg = R16			; Temporary register
-.def Tmp_Data = R17			; Temporary data register
+.def Tmp_Reg = R16			; Temporary register 
+.def Tmp_Data = R17			; Temporary data register 
 .def Cnt_Reg = R18			; Timer counter
-.def RPG_Curr = R25			; Current RPG input state
-.def RPG_Prev = R28			; previous RPG input state
+.def RPG_Curr = R25			; Current RPG input state	:: was R19  //setting to R25 and R26 fixed pushbutton but breaks display
+.def RPG_Prev = R28			; previous RPG input state	:: was R20
 .def DC = R21				; Duty cycle counter
 
 ; 16-bit r25division registers
@@ -57,69 +56,83 @@ sbi DDRD, 3  				; uC PD3 (OC0B) -> Fan PWM
 .def dd16uL	  =r22
 .def dd16uH	  =r23
 .def dv16uL	  =r24
-.def dv16uH	  =r19
-.def dcnt16u  =r20
+.def dv16uH	  =r19 //Previously used 
+.def dcnt16u  =r20 //previously used 
+
 
 ;==================| Initialize LCD |================
 rcall Delay_100m			; wait to power up LCD
+
 ldi Tmp_Data, 0x03			; Set 8-bit mode
 rcall Send_Nibble
 rcall Delay_5m
+
 rcall Send_Nibble			; Set 8-bit mode
 rcall Delay_200u
+
 rcall Send_Nibble			; Set 8-bit mode
 rcall Delay_200u
+
 ldi Tmp_Data, 0x02			; Set 4-bit mode
 rcall Send_Nibble
 rcall Delay_5m
+
 ldi Tmp_Data, 0x28			; Set interface
 rcall Send_Instr
 rcall Delay_100u
+
 ldi Tmp_Data, 0x08			; dont shift display, hide cursor 
 rcall Send_Instr
 rcall Delay_100u
+
 ldi Tmp_Data, 0x01			; Clear and home display
 rcall Send_Instr
 rcall Delay_5m
+
 ldi Tmp_Data, 0x06			; move cursor right
 rcall Send_Instr
 rcall Delay_100u
+
 ldi Tmp_Data, 0x0C			; turn on display
 rcall Send_Instr
 rcall Delay_100u
 
 ;============| Initialize PWM on timer2 |============
-ldi Tmp_Reg, 0				; clear timer
+ldi Tmp_Reg, 0				; clear timer0
 sts TCNT2, Tmp_Reg
-ldi Tmp_Reg, 199			; set timer2 TOP val to 200
+
+ldi Tmp_Reg, 199			; set timer0 TOP val to 200
 sts OCR2A, Tmp_Reg
-ldi Tmp_Reg, 0x23			; configure timer2 to Fast PWM (mode 7)
+
+ldi Tmp_Reg, 0x23			; configure timer0 to Fast PWM (mode 7)
 sts TCCR2A, Tmp_Reg
 ldi Tmp_Reg, 0x09
 sts TCCR2B, Tmp_Reg
-ldi Tmp_Reg, 0				; set timer2 duty cycle to 0
+
+ldi Tmp_Reg, 0				; set timer0 duty cycle to 0 (DC = OCR0B / 200)
 sts OCR2B, Tmp_Reg
 
 ;=============| Initialize RPG Interupt |============
 ldi Tmp_Reg, (1<<PCINT20) | (1<<PCINT21)	; enable PCINT20 and PCINT21
 sts PCMSK2, Tmp_Reg
-ldi Tmp_Reg, (1<<PCIE2)		; enable PCINT2
+ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2
 sts PCICR, Tmp_Reg
 
 ;=============| Initialize PBS Interupt |============
-sbi EIMSK, INT0				; enable INT0
-ldi Tmp_Reg, (1<<ISC01)		; enable falling edge detection on INT0
+ldi Tmp_Reg, EICRA
+sbr Tmp_Reg, (1<<ISC01)						; enable falling edge detection on INT0
 sts EICRA, Tmp_Reg
+sbi EIMSK, INT0								; enable INT0
 
 ;===================| Main Loop |====================
 sei							; Enable interupts globally
 ldi DC, 0					; initialize duty cycle counter to 0
 ldi XH, 0					; initialize duty cycle display counter to 0
 ldi XL, 5
-rcall Send_Ln1				; Send initial string to LCD
+rcall Send_Ln1			; Send initial string to LCD
 rcall Send_Ln2
-ldi Tmp_Data, 0x46			; 'F' for 'OFF'
-rcall Push_Char				; push 'F' to LCD twice
+ldi Tmp_Data, 0x46		; 'F' for 'OFF'
+rcall Push_Char			; push 'F' to LCD twice
 rcall Push_Char
 Main:
 	nop						; take a short break before looping back
@@ -128,30 +141,36 @@ Main:
 
 ;==============| PBS Interupt Handling |=============
 INT0_ISR:
-	lds Tmp_Reg, PCICR
-	cpi Tmp_Reg, (1<<PCIE2)	; if PCINT2 is enabled, turn fan off
-	breq Fan_Off
-	; Otherwise turn fan on
-	rcall Send_Ln2			; display static string
+	;lds Tmp_Reg, PCICR			;Check the rpg interupt status
+	;cpi Tmp_Reg, (1<<PCIE2)		;Note: PCIE2 stored whether rpg interupts are on or not
+	;breq Fan_Off				;turn fan off
+	lds Tmp_Reg, OCR2B			; load timer2 duty cycle into Tmp_Reg
+	cpi Tmp_Reg, 0				; if timer2 duty cycle is DC, turn fan off
+	brne Fan_Off				;brge
+	sts OCR2B, DC				; otherwise, turn fan on
+	; Display ON
+	clr Tmp_Reg									;Clear Temp_Reg
+	ldi Tmp_Reg, (1<<PCIE2)						; enable PCINT2 (rpg interupts
+	sts PCICR, Tmp_Reg							;Update Config
+	rcall Send_Ln2			;display static display stuff
 	ldi Tmp_Data, 0x4E		; Push 'N' for 'ON'
 	rcall Push_Char
 	ldi Tmp_Data, 0x20		; Push space to remove last 'F' from 'OFF'
 	rcall Push_Char
-	sts OCR2B, DC			; set duty cycle back to DC
-	ldi Tmp_Reg, (1<<PCIE2)	; enable PCINT2 (rpg interupts)
-	sts PCICR, Tmp_Reg
-	rjmp INT0_Exit
+	rcall Delay_100u
+	reti
 Fan_Off:
-	rcall Send_Ln2			;display static display stuff
-	ldi Tmp_Data, 0x46		; 'F' for 'OFF'
-	rcall Push_Char			; push 'F' to LCD twice
-	rcall Push_Char
-	ldi Tmp_Reg, 0			; set duty cycle to 0
+	ldi Tmp_Reg, 0			; set timer2 duty cycle to 0
 	sts OCR2B, Tmp_Reg
-	clr Tmp_Reg
-	sts PCICR, Tmp_Reg		; disable PCINT2 (rpg interupts)
-INT0_Exit:
-	rcall Delay_5m
+	; display off
+	clr Tmp_Reg									;Clear Temp_Reg
+	ldi Tmp_Reg, (0<<PCIE2)						; disable PCINT2 (rpg interupts
+	sts PCICR, Tmp_Reg							;Update Config
+	rcall Send_Ln2								;display static display stuff
+	ldi Tmp_Data, 0x46							; 'F' for 'OFF'
+	rcall Push_Char								; push 'F' to LCD twice
+	rcall Push_Char
+	rcall Delay_100u
 	reti
 
 ;==============| RPG Interupt Handling |=============
@@ -161,13 +180,13 @@ PCINT2_ISR:
 	cpi RPG_Curr, 0x30		; if either is not set, return
 	breq RPG_Detent
 	mov RPG_Prev, RPG_Curr	; update RPG state
-	rjmp PCINT2_Exit
+	reti
 RPG_Detent:
 	cpi RPG_Prev, 0x10 		; if prev state was '01', branch to Incr
 	breq Incr
 	cpi RPG_Prev, 0x20 		; if prev state was '10', branch to Decr
 	breq Decr
-	rjmp PCINT2_Exit
+	reti
 Incr:
 	ldi RPG_Prev, 0x30		; update RPG state to '11'
 	cpi DC, 198				; if DC is at 100%, return
@@ -183,7 +202,7 @@ Incr:
 	rcall Push_Char
 	ldi Tmp_Data, 0x20		; Push space to remove last 'F' from 'OFF'
 	rcall Push_Char
-	rjmp PCINT2_Exit
+	reti
 Decr:
 	ldi RPG_Prev, 0x30		; update RPG state to '11'
 	cpi DC, 0				; if DC is at 0%, return
@@ -202,7 +221,6 @@ PCINT2_Exit:
 	reti
 
 ;===============| LCD Communication |================
-; Write first line of LCD
 Send_Ln1:
 	ldi Tmp_Data, 0x80		; set DDRAM address to 0x00
 	rcall Send_Instr
@@ -218,7 +236,7 @@ Send_Ln1_Loop:
 	brne Next_Static
 	ret						; else return
 Next_Static:
-	lpm	Tmp_Data, Z+		; load next byte from prog mem
+	lpm	Tmp_Data, Z+		; load byte from prog mem at Z in Tmp_Reg, post-increment Z
 	rcall Push_Char			; push character to LCD
 	dec r25
 	rjmp Send_Ln1_Loop
@@ -249,7 +267,7 @@ Write_Variable:
 	pop Tmp_Data			; next digit
 	rcall Push_Char
 	rjmp Send_Ln1_Loop
-; Write second line of LCD
+
 Send_Ln2:
 	ldi Tmp_Data, 0xC0		; set DDRAM address to 0xC0
 	rcall Send_Instr
@@ -259,12 +277,12 @@ Send_Ln2:
 	ldi r30, LOW(2*ln2_static) 	; Load Z register low
 	ldi r31, HIGH(2*ln2_static)	; Load Z register high
 Send_Ln2_Loop:
-	lpm	Tmp_Data, Z+		; load next byte from prog mem
+	lpm	Tmp_Data, Z+		; load byte from prog mem at Z in Tmp_Reg, post-increment Z
 	rcall Push_Char			; push character to LCD
 	dec r25
 	brne Send_Ln2_Loop
 	ret
-; LCD shared subroutines
+	
 Push_Char:
 	sbi PORTB, 5			; set R/S | select data register
 	cbi PORTB, 3			; clear Enable
@@ -319,13 +337,22 @@ Delay_loop:
 	in Tmp_Reg, TIFR0		; input timer2 interrupt flag register
 	sbrs Tmp_Reg, 0			; if overflow flag is not set, loop
 	rjmp Delay_loop
+
 	ldi Tmp_Reg, (1<<TOV0)	; acknowledge overflow flag
 	out TIFR0, Tmp_Reg		; output to timer0 interrupt flag register
+
 	dec Cnt_Reg				; Decrement Timer counter
 	brne Delay_loop			; if Timer counter is zero, loop
 	ret						; otherwise, return
 
 ;==================| 16-bit Division |===================
+;| Load Dividend:	dd16uH:dd16uL
+;| Load Divisor:	dv16uH:dv16uL
+;| Call div16u
+;| [dd16uH:dd16uL / dv16uH:dv16uL]
+;| Result: 			dres16uH:dres16uL
+;| Remainder:		drem16uH:drem16uL
+
 div16u:
 	clr	drem16uL			; clear remainder Low byte
 	sub	drem16uH,drem16uH	; clear remainder High byte and carry
