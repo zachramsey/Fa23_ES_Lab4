@@ -89,15 +89,15 @@ rcall Send_Instr
 rcall Delay_100u
 
 ;============| Initialize PWM on timer2 |============
-ldi Tmp_Reg, 0				; clear timer0
+ldi Tmp_Reg, 0				; clear timer
 sts TCNT2, Tmp_Reg
-ldi Tmp_Reg, 199			; set timer0 TOP val to 200
+ldi Tmp_Reg, 199			; set timer2 TOP val to 200
 sts OCR2A, Tmp_Reg
-ldi Tmp_Reg, 0x23			; configure timer0 to Fast PWM (mode 7)
+ldi Tmp_Reg, 0x23			; configure timer2 to Fast PWM (mode 7)
 sts TCCR2A, Tmp_Reg
 ldi Tmp_Reg, 0x09
 sts TCCR2B, Tmp_Reg
-ldi Tmp_Reg, 0				; set timer0 duty cycle to 0
+ldi Tmp_Reg, 0				; set timer2 duty cycle to 0
 sts OCR2B, Tmp_Reg
 
 ;=============| Initialize RPG Interupt |============
@@ -107,9 +107,9 @@ ldi Tmp_Reg, (1<<PCIE2)		; enable PCINT2
 sts PCICR, Tmp_Reg
 
 ;=============| Initialize PBS Interupt |============
+sbi EIMSK, INT0				; enable INT0
 ldi Tmp_Reg, (1<<ISC01)		; enable falling edge detection on INT0
 sts EICRA, Tmp_Reg
-sbi EIMSK, INT0				; enable INT0
 
 ;===================| Main Loop |====================
 sei							; Enable interupts globally
