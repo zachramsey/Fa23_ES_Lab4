@@ -37,3 +37,13 @@ Optional (5% bonus pts): Use tachometer signal to detect when fan is on/off and 
 | DC = 22.0%<BR>Fan: OFF | DC = 22.0%<BR>Fan: Stopped |
 |  | DC = 3.0%<BR>Fan: LOW RPM |
 |  | DC = 15.0%<BR>Fan: OFF |
+
+---
+
+### Circuit:
+![Circuit Image](./res/circuit.jpg)
+
+---
+
+### Functionality:
+![Functionality Video](./res/functionality.mp4.mov)
