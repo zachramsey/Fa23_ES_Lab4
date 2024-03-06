@@ -41,9 +41,9 @@ Optional (5% bonus pts): Use tachometer signal to detect when fan is on/off and 
 ---
 
 ### Circuit:
-![Circuit Image](./res/circuit.jpg)
+![20231103_121138](https://github.com/zachramsey/Fa23_ES_Lab4/assets/10159774/48f105ef-55e2-4f1e-88a4-b2eae619aa95)
 
 ---
 
 ### Functionality:
-![Functionality Video](./res/functionality.mp4)
+https://github.com/zachramsey/Fa23_ES_Lab4/assets/10159774/d9708b90-64d2-455c-bccf-2acfb5553421
