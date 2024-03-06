@@ -46,4 +46,4 @@ Optional (5% bonus pts): Use tachometer signal to detect when fan is on/off and 
 ---
 
 ### Functionality:
-![Functionality Video](./res/functionality.mp4.mov)
+![Functionality Video](./res/functionality.mp4)
